@@ -1,0 +1,41 @@
+{
+  "name": "jingle-media-session",
+  "version": "1.0.0",
+  "author": "Lance Stout <lance@andyet.net>",
+  "bugs": "https://github.com/otalk/jingle-media-session/issues",
+  "contributors": [
+    "Philipp Hancke <fippo@andyet.net>"
+  ],
+  "dependencies": {
+    "extend-object": "^1.0.0",
+    "jingle": "^2.0.0",
+    "rtcpeerconnection": "^2.4.5"
+  },
+  "devDependencies": {
+    "browserify": "^5.11.1",
+    "covert": "^1.0.0",
+    "jshint": "^2.5.5",
+    "nsp": "^0.2.6",
+    "precommit-hook": "^1.0.7",
+    "tap-spec": "^0.2.1",
+    "tape": "^2.14.0",
+    "uglify-js": "^2.4.15"
+  },
+  "homepage": "https://github.com/otalk/jingle-media-session",
+  "keywords": [
+    "webrtc",
+    "xmpp",
+    "jingle"
+  ],
+  "license": "MIT",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/otalk/jingle-media-session.git"
+  },
+  "scripts": {
+    "audit": "make audit",
+    "build": "make build",
+    "test": "make test"
+  }
+}
