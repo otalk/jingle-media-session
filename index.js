@@ -14,9 +14,19 @@ function filterContentSources(content, stream) {
     }
 }
 
+function filterUnusedLabels(content) {
+    // Remove mslabel and label ssrc-specific attributes
+    var sources = content.description.sources || [];
+    sources.forEach(function (source) {
+        source.parameters = source.parameters.filter(function (parameter) {
+            return !(parameter.key === 'mslabel' || parameter.key === 'label');
+        });
+    });
+}
+
 
 function MediaSession(opts) {
-    BaseSession.call(this);
+    BaseSession.call(this, opts);
 
     this.pc = new RTCPeerConnection({
         iceServers: opts.iceServers || [],
@@ -25,6 +35,8 @@ function MediaSession(opts) {
 
     this.pc.on('ice', this.onIceCandidate.bind(this));
     this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this));
+    this.pc.on('addStream', this.onAddStream.bind(this));
+    this.pc.on('removeStream', this.onRemoveStream.bind(this));
 
     this._ringing = false;
 }
@@ -84,6 +96,9 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     }
                 });
             }
+
+            offer.jingle.contents.forEach(filterUnusedLabels);
+
             self.send('session-initiate', offer.jingle);
         });
     },
@@ -100,6 +115,9 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 self._log('error', 'Could not create WebRTC answer', err);
                 return self.end('failed-application');
             }
+
+            answer.jingle.contents.forEach(filterUnusedLabels);
+
             self.send('session-accept', answer.jingle);
         });
     },
@@ -150,8 +168,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // Stream control methods
     // ----------------------------------------------------------------
 
-    addStream: function (stream, renegotiate) {
+    addStream: function (stream, renegotiate, cb) {
         var self = this;
+
+        cb = cb || function () {};
 
         this.pc.addStream(stream);
 
@@ -164,23 +184,28 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             jingle: this.pc.remoteDescription
         }, function (err) {
             if (err) {
-                return self._log('error', 'Could not create offer for adding new stream');
+                self._log('error', 'Could not create offer for adding new stream');
+                return cb(err);
             }
             self.pc.answer(function (err, answer) {
                 if (err) {
-                    return self._log('error', 'Could not create answer for adding new stream');
+                    self._log('error', 'Could not create answer for adding new stream');
+                    return cb(err);
                 }
                 answer.jingle.contents.forEach(function (content) {
                     filterContentSources(content, stream);
                 });
 
                 self.send('source-add', answer.jingle);
+                cb();
             });
         });
     },
 
-    removeStream: function (stream, renegotiate) {
+    removeStream: function (stream, renegotiate, cb) {
         var self = this;
+
+        cb = cb || function () {};
 
         if (!renegotiate) {
             this.pc.removeStream(stream);
@@ -200,18 +225,23 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             jingle: this.pc.remoteDescription
         }, function (err) {
             if (err) {
-                return self._log('error', 'Could not process offer for removing stream');
+                self._log('error', 'Could not process offer for removing stream');
+                return cb(err);
             }
             self.pc.answer(function (err) {
                 if (err) {
                     self._log('error', 'Could not process answer for removing stream');
+                    return cb(err);
                 }
+                cb();
             });
         });
     },
 
-    switchStream: function (oldStream, newStream) {
+    switchStream: function (oldStream, newStream, cb) {
         var self = this;
+
+        cb = cb || function () {};
 
         var desc = this.pc.localDescription;
         desc.contents.forEach(function (content) {
@@ -231,13 +261,22 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.pc.handleOffer({
             type: 'offer',
             jingle: this.pc.remoteDescription
-        }, function () {
+        }, function (err) {
+            if (err) {
+                self._log('error', 'Could not process offer for switching streams');
+                return cb(err);
+            }
             self.pc.answer(function (err, answer) {
+                if (err) {
+                    self._log('error', 'Could not process answer for switching streams');
+                    return cb(err);
+                }
                 answer.jingle.contents.forEach(function (content) {
                     delete content.transport;
                     delete content.description.payloads;
                 });
                 self.send('source-add', answer.jingle);
+                cb();
             });
         });
     },
@@ -279,6 +318,20 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 this.connectionState = 'disconnected';
                 break;
         }
+    },
+
+    // ----------------------------------------------------------------
+    // Stream event handlers
+    // ----------------------------------------------------------------
+
+    onAddStream: function (stream) {
+        this._log('info', 'Stream added');
+        this.emit('peerStreamAdded', this, stream.stream);
+    },
+
+    onRemoveStream: function (stream) {
+        this._log('info', 'Stream removed');
+        this.emit('peerStreamRemoved', this, stream.stream);
     },
 
     // ----------------------------------------------------------------
