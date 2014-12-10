@@ -8,8 +8,8 @@
   ],
   "dependencies": {
     "extend-object": "^1.0.0",
-    "jingle": "^2.0.0",
-    "rtcpeerconnection": "^2.6.4"
+    "jingle-session": "^1.0.0",
+    "rtcpeerconnection": "^2.6.6"
   },
   "devDependencies": {
     "browserify": "^5.11.1",
@@ -35,7 +35,6 @@
   },
   "scripts": {
     "audit": "make audit",
-    "build": "make build",
-    "test": "make test"
+    "build": "make build"
   }
 }

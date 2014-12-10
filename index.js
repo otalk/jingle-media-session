@@ -1,6 +1,6 @@
 var util = require('util');
 var extend = require('extend-object');
-var BaseSession = require('jingle').BaseSession;
+var BaseSession = require('jingle-session');
 var RTCPeerConnection = require('rtcpeerconnection');
 
 
@@ -55,6 +55,11 @@ Object.defineProperties(MediaSession.prototype, {
                 this._ringing = value;
                 this.emit('change:ringing', value);
             }
+        }
+    },
+    streams: {
+        get: function () {
+            return this.pc.remoteStreams;
         }
     }
 });
@@ -123,7 +128,11 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     },
 
     end: function (reason, silent) {
+        var self = this;
         this.pc.close();
+        this.streams.forEach(function (stream) {
+            self.onRemoveStream({stream: stream});
+        });
         BaseSession.prototype.end.call(this, reason, silent);
     },
 
@@ -202,6 +211,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
     },
 
+    addStream2: function (stream, cb) {
+        this.addStream(stream, true, cb);
+    },
+
     removeStream: function (stream, renegotiate, cb) {
         var self = this;
 
@@ -236,6 +249,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 cb();
             });
         });
+    },
+
+    removeStream2: function (stream, cb) {
+        this.removeStream(stream, true, cb);
     },
 
     switchStream: function (oldStream, newStream, cb) {
@@ -324,14 +341,14 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // Stream event handlers
     // ----------------------------------------------------------------
 
-    onAddStream: function (stream) {
+    onAddStream: function (event) {
         this._log('info', 'Stream added');
-        this.emit('peerStreamAdded', this, stream.stream);
+        this.emit('peerStreamAdded', this, event.stream);
     },
 
-    onRemoveStream: function (stream) {
+    onRemoveStream: function (event) {
         this._log('info', 'Stream removed');
-        this.emit('peerStreamRemoved', this, stream.stream);
+        this.emit('peerStreamRemoved', this, event.stream);
     },
 
     // ----------------------------------------------------------------
@@ -376,9 +393,15 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     },
 
     onSessionTerminate: function (changes, cb) {
+        var self = this;
+
         this._log('info', 'Terminating session');
         this.pc.close();
+        this.streams.forEach(function (stream) {
+            self.onRemoveStream({stream: stream});
+        });
         BaseSession.prototype.end.call(this, changes.reason, true);
+
         cb();
     },
 
@@ -431,6 +454,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.pc.remoteDescription.contents.forEach(function (content, idx) {
             var desc = content.description;
             var ssrcs = desc.sources || [];
+            var groups = desc.sourceGroups || [];
 
             changes.contents.forEach(function (newContent) {
                 if (content.name !== newContent.name) {
@@ -442,6 +466,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
                 ssrcs = ssrcs.concat(newSSRCs);
                 newDesc.contents[idx].description.sources = JSON.parse(JSON.stringify(ssrcs));
+
+                var newGroups = newDesc.sourceGroups || [];
+                groups = groups.concat(newGroups);
+                newDesc.contents[idx].description.sourceGroups = JSON.parse(JSON.stringify(groups));
             });
         });
 
@@ -476,6 +504,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.pc.remoteDescription.contents.forEach(function (content, idx) {
             var desc = content.descriptoin;
             var ssrcs = desc.sources || [];
+            var groups = desc.sourceGroups || [];
 
             changes.contents.forEach(function (newContent) {
                 if (content.name !== newContent.name) {
@@ -484,10 +513,14 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
                 var newContentDesc = newContent.description;
                 var newSSRCs = newContentDesc.sources || [];
+                var newGroups = newContentDesc.sourceGroups || [];
 
-                var found = -1;
-                for (var i = 0; i < newSSRCs.length; i++) {
-                    for (var j = 0; j < ssrcs.length; j++) {
+                var found, i, j, k;
+
+
+                for (i = 0; i < newSSRCs.length; i++) {
+                    found = -1;
+                    for (j = 0; j < ssrcs.length; j++) {
                         if (newSSRCs[i].ssrc === ssrcs[j].ssrc) {
                             found = j;
                             break;
@@ -496,6 +529,31 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     if (found > -1) {
                         ssrcs.splice(found, 1);
                         newDesc.contents[idx].description.sources = JSON.parse(JSON.stringify(ssrcs));
+                    }
+                }
+
+                // Remove ssrc-groups that are no longer needed
+                for (i = 0; i < newGroups.length; i++) {
+                    found = -1;
+                    for (j = 0; i < groups.length; j++) {
+                        if (newGroups[i].semantics === groups[j].semantics &&
+                            newGroups[i].sources.length === groups[j].sources.length) {
+                            var same = true;
+                            for (k = 0; k < newGroups[i].sources.length; k++) {
+                                if (newGroups[i].sources[k] !== groups[j].sources[k]) {
+                                    same = false;
+                                    break;
+                                }
+                            }
+                            if (same) {
+                                found = j;
+                                break;
+                            }
+                        }
+                    }
+                    if (found > -1) {
+                        groups.splice(found, 1);
+                        newDesc.contents[idx].description.sourceGroups = JSON.parse(JSON.stringify(groups));
                     }
                 }
             });
