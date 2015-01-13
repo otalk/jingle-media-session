@@ -502,7 +502,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         var newDesc = this.pc.remoteDescription;
         this.pc.remoteDescription.contents.forEach(function (content, idx) {
-            var desc = content.descriptoin;
+            var desc = content.description;
             var ssrcs = desc.sources || [];
             var groups = desc.sourceGroups || [];
 
