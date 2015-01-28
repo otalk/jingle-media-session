@@ -467,7 +467,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 ssrcs = ssrcs.concat(newSSRCs);
                 newDesc.contents[idx].description.sources = JSON.parse(JSON.stringify(ssrcs));
 
-                var newGroups = newDesc.sourceGroups || [];
+                var newGroups = newContentDesc.sourceGroups || [];
                 groups = groups.concat(newGroups);
                 newDesc.contents[idx].description.sourceGroups = JSON.parse(JSON.stringify(groups));
             });
