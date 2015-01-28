@@ -59,7 +59,7 @@ Object.defineProperties(MediaSession.prototype, {
     },
     streams: {
         get: function () {
-            return this.pc.remoteStreams;
+            return this.pc.getRemoteStreams();
         }
     }
 });
