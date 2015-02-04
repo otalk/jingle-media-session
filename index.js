@@ -422,7 +422,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         }
 
         if (info.mute) {
-            this._log('info', 'Muting', info.unmute);
+            this._log('info', 'Muting', info.mute);
             this.emit('mute', this, info.mute);
             return cb();
         }
