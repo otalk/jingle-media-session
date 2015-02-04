@@ -71,9 +71,11 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // Session control methods
     // ----------------------------------------------------------------
 
-    start: function (constraints) {
+    start: function (constraints, next) {
         var self = this;
         this.state = 'pending';
+
+        next = next || function () {};
 
         this.pc.isInitiator = true;
         this.pc.offer(constraints, function (err, offer) {
@@ -105,11 +107,15 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             offer.jingle.contents.forEach(filterUnusedLabels);
 
             self.send('session-initiate', offer.jingle);
+
+            next();
         });
     },
 
-    accept: function () {
+    accept: function (next) {
         var self = this;
+
+        next = next || function () {};
 
         this._log('info', 'Accepted incoming session');
 
@@ -124,6 +130,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             answer.jingle.contents.forEach(filterUnusedLabels);
 
             self.send('session-accept', answer.jingle);
+
+            next();
         });
     },
 
