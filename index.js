@@ -38,6 +38,10 @@ function MediaSession(opts) {
     this.pc.on('addStream', this.onAddStream.bind(this));
     this.pc.on('removeStream', this.onRemoveStream.bind(this));
 
+    if (opts.stream) {
+        this.addStream(opts.stream);
+    }
+
     this._ringing = false;
 }
 
