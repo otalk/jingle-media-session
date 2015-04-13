@@ -144,10 +144,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
     end: function (reason, silent) {
         var self = this;
-        this.pc.close();
         this.streams.forEach(function (stream) {
             self.onRemoveStream({stream: stream});
         });
+        this.pc.close();
         BaseSession.prototype.end.call(this, reason, silent);
     },
 
