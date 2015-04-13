@@ -63,7 +63,10 @@ Object.defineProperties(MediaSession.prototype, {
     },
     streams: {
         get: function () {
-            return this.pc.getRemoteStreams();
+            if (this.pc.signalingState !== 'closed') {
+                return this.pc.getRemoteStreams();
+            }
+            return [];
         }
     }
 });
