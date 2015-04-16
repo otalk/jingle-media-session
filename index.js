@@ -407,10 +407,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         var self = this;
 
         this._log('info', 'Terminating session');
-        this.pc.close();
         this.streams.forEach(function (stream) {
             self.onRemoveStream({stream: stream});
         });
+        this.pc.close();
         BaseSession.prototype.end.call(this, changes.reason, true);
 
         cb();
