@@ -33,6 +33,8 @@ function MediaSession(opts) {
         useJingle: true
     }, opts.constraints || {});
 
+    this._constraints = opts.constraints;
+
     this.pc.on('ice', this.onIceCandidate.bind(this));
     this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this));
     this.pc.on('addStream', this.onAddStream.bind(this));
@@ -82,6 +84,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         var self = this;
         this.state = 'pending';
 
+        constraints = constraints || this._constraints;
         next = next || function () {};
 
         this.pc.isInitiator = true;
