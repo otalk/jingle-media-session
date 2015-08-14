@@ -546,7 +546,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 // Remove ssrc-groups that are no longer needed
                 for (i = 0; i < newGroups.length; i++) {
                     found = -1;
-                    for (j = 0; i < groups.length; j++) {
+                    for (j = 0; j < groups.length; j++) {
                         if (newGroups[i].semantics === groups[j].semantics &&
                             newGroups[i].sources.length === groups[j].sources.length) {
                             var same = true;
