@@ -78,14 +78,14 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // Session control methods
     // ----------------------------------------------------------------
 
-    start: function (constraints, next) {
+    start: function (offerOptions, next) {
         var self = this;
         this.state = 'pending';
 
         next = next || function () {};
 
         this.pc.isInitiator = true;
-        this.pc.offer(constraints, function (err, offer) {
+        this.pc.offer(offerOptions, function (err, offer) {
             if (err) {
                 self._log('error', 'Could not create WebRTC offer', err);
                 return self.end('failed-application', true);
@@ -93,7 +93,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
             // a workaround for missing a=sendonly
             // https://code.google.com/p/webrtc/issues/detail?id=1553
-            if (constraints && constraints.mandatory) {
+            if (offerOptions && offerOptions.mandatory) {
                 offer.jingle.contents.forEach(function (content) {
                     var mediaType = content.description.media;
 
@@ -101,11 +101,11 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                         return;
                     }
 
-                    if (!constraints.mandatory.OfferToReceiveAudio && mediaType === 'audio') {
+                    if (!offerOptions.mandatory.OfferToReceiveAudio && mediaType === 'audio') {
                         content.senders = 'initiator';
                     }
 
-                    if (!constraints.mandatory.OfferToReceiveVideo && mediaType === 'video') {
+                    if (!offerOptions.mandatory.OfferToReceiveVideo && mediaType === 'video') {
                         content.senders = 'initiator';
                     }
                 });
