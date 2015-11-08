@@ -243,7 +243,6 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     return content.description.descType === 'rtp' && content.description.sources && content.description.sources.length;
                 });
                 delete answer.jingle.groups;
-                console.log('s-a', answer.jingle);
 
                 self.send('source-add', answer.jingle);
                 cb();
