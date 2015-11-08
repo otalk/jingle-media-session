@@ -5,11 +5,30 @@ var RTCPeerConnection = require('rtcpeerconnection');
 
 
 function filterContentSources(content, stream) {
+    if (content.description.descType !== 'rtp') {
+        return;
+    }
     delete content.transport;
     delete content.description.payloads;
+    delete content.description.headerExtensions;
+    content.description.mux = false;
+
     if (content.description.sources) {
         content.description.sources = content.description.sources.filter(function (source) {
             return stream.id === source.parameters[1].value.split(' ')[0];
+        });
+    }
+    // remove source groups not related to this stream
+    if (content.description.sourceGroups) {
+        content.description.sourceGroups = content.description.sourceGroups.filter(function (group) {
+            var found = false;
+            for (var i = 0; i < content.description.sources.length; i++) {
+                if (content.description.sources[i].ssrc === group.sources[0]) {
+                    found = true;
+                    break;
+                }
+            }
+            return found;
         });
     }
 }
@@ -34,6 +53,7 @@ function MediaSession(opts) {
     }, opts.constraints || {});
 
     this.pc.on('ice', this.onIceCandidate.bind(this));
+    this.pc.on('endOfCandidates', this.onIceEndOfCandidates.bind(this));
     this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this));
     this.pc.on('addStream', this.onAddStream.bind(this));
     this.pc.on('removeStream', this.onRemoveStream.bind(this));
@@ -219,6 +239,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 answer.jingle.contents.forEach(function (content) {
                     filterContentSources(content, stream);
                 });
+                answer.jingle.contents = answer.jingle.contents.filter(function (content) {
+                    return content.description.descType === 'rtp' && content.description.sources && content.description.sources.length;
+                });
+                delete answer.jingle.groups;
 
                 self.send('source-add', answer.jingle);
                 cb();
@@ -244,6 +268,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         desc.contents.forEach(function (content) {
             filterContentSources(content, stream);
         });
+        desc.contents = desc.contents.filter(function (content) {
+            return content.description.descType === 'rtp' && content.description.sources && content.description.sources.length;
+        });
+        delete desc.groups;
 
         this.send('source-remove', desc);
         this.pc.removeStream(stream);
@@ -320,6 +348,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     onIceCandidate: function (candidate) {
         this._log('info', 'Discovered new ICE candidate', candidate.jingle);
         this.send('transport-info', candidate.jingle);
+    },
+
+    onIceEndOfCandidates: function () {
+        this._log('info', 'ICE end of candidates');
     },
 
     onIceStateChange: function () {
