@@ -298,9 +298,13 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.removeStream(stream, true, cb);
     },
 
-    switchStream: function (oldStream, newStream, cb) {
+    switchStream: function (oldStream, newStream, opts, cb) {
         var self = this;
 
+        if (!opts || typeof opts === 'function') {
+            cb = opts;
+            opts = { audio: false, video: true };
+        }
         cb = cb || function () {};
 
         var desc = this.pc.localDescription;
@@ -312,9 +316,18 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.pc.removeStream(oldStream);
         this.send('source-remove', desc);
 
-        var audioTracks = oldStream.getAudioTracks();
-        if (audioTracks.length) {
-            newStream.addTrack(audioTracks[0]);
+        if (!opts.audio) {
+            var audioTracks = oldStream.getAudioTracks();
+            if (audioTracks.length) {
+                newStream.addTrack(audioTracks[0]);
+            }
+        }
+
+        if (!opts.video) {
+            var videoTracks = oldStream.getVideoTracks();
+            if (videoTracks.length) {
+                newStream.addTrack(videoTracks[0]);
+            }
         }
 
         this.pc.addStream(newStream);
