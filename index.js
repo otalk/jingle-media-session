@@ -312,11 +312,6 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.pc.removeStream(oldStream);
         this.send('source-remove', desc);
 
-        var audioTracks = oldStream.getAudioTracks();
-        if (audioTracks.length) {
-            newStream.addTrack(audioTracks[0]);
-        }
-
         this.pc.addStream(newStream);
         this.pc.handleOffer({
             type: 'offer',
