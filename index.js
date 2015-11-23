@@ -624,7 +624,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // DataChannels
     // ----------------------------------------------------------------
     onAddChannel: function (channel) {
-        this.emit('channelAdded', channel);
+        this.emit('addChannel', channel);
     }
 });
 
