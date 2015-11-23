@@ -57,6 +57,7 @@ function MediaSession(opts) {
     this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this));
     this.pc.on('addStream', this.onAddStream.bind(this));
     this.pc.on('removeStream', this.onRemoveStream.bind(this));
+    this.pc.on('addChannel', this.onAddChannel.bind(this));
 
     if (opts.stream) {
         this.addStream(opts.stream);
@@ -617,6 +618,13 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 cb();
             });
         });
+    },
+
+    // ----------------------------------------------------------------
+    // DataChannels
+    // ----------------------------------------------------------------
+    onAddChannel: function (channel) {
+        this.emit('channelAdded', channel);
     }
 });
 
