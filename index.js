@@ -140,16 +140,29 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
     },
 
-    accept: function (next) {
+    accept: function (opts, next) {
         var self = this;
 
+        // support calling with accept(next) or accept(opts, next)
+        if (arguments.length === 1 && typeof opts === 'function') {
+            next = opts;
+            opts = {};
+        }
         next = next || function () {};
+        opts = opts || {};
+
+        var constraints = opts.constraints || {
+            mandatory: {
+                OfferToReceiveAudio: true,
+                OfferToReceiveVideo: true
+            }
+        };
 
         this._log('info', 'Accepted incoming session');
 
         this.state = 'active';
 
-        this.pc.answer(function (err, answer) {
+        this.pc.answer(constraints, function (err, answer) {
             if (err) {
                 self._log('error', 'Could not create WebRTC answer', err);
                 return self.end('failed-application');
