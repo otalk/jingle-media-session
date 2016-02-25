@@ -8,8 +8,8 @@
   ],
   "dependencies": {
     "extend-object": "^1.0.0",
-    "jingle-session": "^1.0.0",
-    "rtcpeerconnection": "^3.1.6"
+    "jingle-session": "^2.0.0",
+    "rtcpeerconnection": "^5.0.0"
   },
   "devDependencies": {
     "browserify": "^5.11.1",
