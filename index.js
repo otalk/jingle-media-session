@@ -504,7 +504,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         var newDesc = this.pc.remoteDescription;
         this.pc.remoteDescription.contents.forEach(function (content, idx) {
-            var desc = content.description;
+            var desc = content.application;
             var ssrcs = desc.sources || [];
             var groups = desc.sourceGroups || [];
 
@@ -513,7 +513,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     return;
                 }
 
-                var newContentDesc = newContent.description;
+                var newContentDesc = newContent.application;
                 var newSSRCs = newContentDesc.sources || [];
 
                 ssrcs = ssrcs.concat(newSSRCs);
@@ -554,7 +554,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         var newDesc = this.pc.remoteDescription;
         this.pc.remoteDescription.contents.forEach(function (content, idx) {
-            var desc = content.description;
+            var desc = content.application;
             var ssrcs = desc.sources || [];
             var groups = desc.sourceGroups || [];
 
@@ -563,7 +563,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     return;
                 }
 
-                var newContentDesc = newContent.description;
+                var newContentDesc = newContent.application;
                 var newSSRCs = newContentDesc.sources || [];
                 var newGroups = newContentDesc.sourceGroups || [];
 
