@@ -367,7 +367,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         if (opts.signalEndOfCandidates) {
             var endOfCandidates = this.lastCandidate.jingle;
             endOfCandidates.contents[0].transport = {
-                transType: endOfCandidates.contents[0].transport.transType,
+                transportType: endOfCandidates.contents[0].transport.transportType,
                 gatheringComplete: true
             };
             this.lastCandidate = null;
