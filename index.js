@@ -52,8 +52,8 @@ function MediaSession(opts) {
         useJingle: true
     }, opts.constraints || {});
 
-    this.pc.on('ice', this.onIceCandidate.bind(this));
-    this.pc.on('endOfCandidates', this.onIceEndOfCandidates.bind(this));
+    this.pc.on('ice', this.onIceCandidate.bind(this, opts));
+    this.pc.on('endOfCandidates', this.onIceEndOfCandidates.bind(this, opts));
     this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this));
     this.pc.on('addStream', this.onAddStream.bind(this));
     this.pc.on('removeStream', this.onRemoveStream.bind(this));
@@ -354,13 +354,25 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // ICE action handers
     // ----------------------------------------------------------------
 
-    onIceCandidate: function (candidate) {
+    onIceCandidate: function (opts, candidate) {
         this._log('info', 'Discovered new ICE candidate', candidate.jingle);
         this.send('transport-info', candidate.jingle);
+        if (opts.signalEndOfCandidates) {
+            this.lastCandidate = candidate;
+        }
     },
 
-    onIceEndOfCandidates: function () {
+    onIceEndOfCandidates: function (opts) {
         this._log('info', 'ICE end of candidates');
+        if (opts.signalEndOfCandidates) {
+            var endOfCandidates = this.lastCandidate.jingle;
+            endOfCandidates.contents[0].transport = {
+                transType: endOfCandidates.contents[0].transport.transType,
+                gatheringComplete: true
+            };
+            this.lastCandidate = null;
+            this.send('transport-info', endOfCandidates);
+        }
     },
 
     onIceStateChange: function () {
