@@ -54,7 +54,7 @@ function MediaSession(opts) {
 
     this.pc.on('ice', this.onIceCandidate.bind(this, opts));
     this.pc.on('endOfCandidates', this.onIceEndOfCandidates.bind(this, opts));
-    this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this));
+    this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this, opts));
     this.pc.on('addStream', this.onAddStream.bind(this));
     this.pc.on('removeStream', this.onRemoveStream.bind(this));
     this.pc.on('addChannel', this.onAddChannel.bind(this));
@@ -378,10 +378,13 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         }
     },
 
-    onIceStateChange: function () {
+    onIceStateChange: function (opts) {
         switch (this.pc.iceConnectionState) {
             case 'checking':
                 this.connectionState = 'connecting';
+                if (opts && opts.signalEndOfCandidates) {
+                    this.onIceEndOfCandidates(opts);
+                }
                 break;
             case 'completed':
             case 'connected':
