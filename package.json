@@ -9,7 +9,7 @@
   "dependencies": {
     "extend-object": "^1.0.0",
     "jingle-session": "^1.0.0",
-    "rtcpeerconnection": "^3.1.6"
+    "rtcpeerconnection": "xdumaine/rtcpeerconnection#ice-restart"
   },
   "devDependencies": {
     "browserify": "^5.11.1",
