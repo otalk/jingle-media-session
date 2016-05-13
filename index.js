@@ -151,7 +151,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         next = next || function () {};
         opts = opts || {};
 
-        var constraints = opts.constraints || {
+        self.constraints = opts.constraints || {
             mandatory: {
                 OfferToReceiveAudio: true,
                 OfferToReceiveVideo: true
@@ -162,7 +162,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         this.state = 'active';
 
-        this.pc.answer(constraints, function (err, answer) {
+        this.pc.answer(self.constraints, function (err, answer) {
             if (err) {
                 self._log('error', 'Could not create WebRTC answer', err);
                 return self.end('failed-application');
@@ -235,6 +235,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         if (!renegotiate) {
             return;
+        } else if (typeof renegotiate === 'object') {
+            self.constraints = renegotiate;
         }
 
         this.pc.handleOffer({
@@ -245,7 +247,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 self._log('error', 'Could not create offer for adding new stream');
                 return cb(err);
             }
-            self.pc.answer(function (err, answer) {
+            self.pc.answer(self.constraints, function (err, answer) {
                 if (err) {
                     self._log('error', 'Could not create answer for adding new stream');
                     return cb(err);
@@ -276,6 +278,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         if (!renegotiate) {
             this.pc.removeStream(stream);
             return;
+        } else if (typeof renegotiate === 'object') {
+            self.constraints = renegotiate;
         }
 
         var desc = this.pc.localDescription;
@@ -298,7 +302,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 self._log('error', 'Could not process offer for removing stream');
                 return cb(err);
             }
-            self.pc.answer(function (err) {
+            self.pc.answer(self.constraints, function (err) {
                 if (err) {
                     self._log('error', 'Could not process answer for removing stream');
                     return cb(err);
@@ -335,7 +339,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 self._log('error', 'Could not process offer for switching streams');
                 return cb(err);
             }
-            self.pc.answer(function (err, answer) {
+            self.pc.answer(self.constraints, function (err, answer) {
                 if (err) {
                     self._log('error', 'Could not process answer for switching streams');
                     return cb(err);
@@ -548,7 +552,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 });
             }
 
-            self.pc.answer(function (err) {
+            self.pc.answer(self.constraints, function (err) {
                 if (err) {
                     self._log('error', 'Error adding new stream source');
                     return cb({
@@ -633,7 +637,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     condition: 'general-error'
                 });
             }
-            self.pc.answer(function (err) {
+            self.pc.answer(self.constraints, function (err) {
                 if (err) {
                     self._log('error', 'Error removing stream source');
                     return cb({
