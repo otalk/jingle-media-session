@@ -453,6 +453,15 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             };
             this.lastCandidate = null;
             this.send('transport-info', endOfCandidates);
+        } else {
+            var callInfo = {
+                msg: 'ICE End of candidates signaled with no candidates gathered.',
+                signalingState: this.pc && this.pc.signalingState,
+                connectionState: this.connectionState,
+                localDescription: this.pc && this.pc.localDescription,
+                remoteDescription: this.pc && this.pc.remoteDescription
+            };
+            this._log('error', callInfo);
         }
     },
 
