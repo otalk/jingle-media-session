@@ -459,9 +459,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 signalingState: this.pc && this.pc.signalingState,
                 connectionState: this.connectionState,
                 localDescription: this.pc && this.pc.localDescription,
-                remoteDescription: this.pc && this.pc.remoteDescription
+                remoteDescription: this.pc && this.pc.remoteDescription,
+                sid: this.sid
             };
-            this._log('error', callInfo);
+            this.emit('log:warn', callInfo);
         }
     },
 
