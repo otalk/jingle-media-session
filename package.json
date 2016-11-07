@@ -1,6 +1,6 @@
 {
   "name": "jingle-media-session-purecloud",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "author": "Xander Dumaine <xander.dumaine@inin.com>",
   "bugs": "https://github.com/xdumaine/jingle-media-session/issues",
   "contributors": [
@@ -10,7 +10,7 @@
   "dependencies": {
     "extend-object": "^1.0.0",
     "jingle-session": "^1.0.0",
-    "rtcpeerconnection": "5.0.0"
+    "rtcpeerconnection": "6.0.0"
   },
   "devDependencies": {
     "browserify": "^5.11.1",
