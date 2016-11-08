@@ -5,25 +5,25 @@ var RTCPeerConnection = require('rtcpeerconnection');
 
 
 function filterContentSources(content, stream) {
-    if (content.description.descType !== 'rtp') {
+    if (content.application.applicationType !== 'rtp') {
         return;
     }
     delete content.transport;
-    delete content.description.payloads;
-    delete content.description.headerExtensions;
-    content.description.mux = false;
+    delete content.application.payloads;
+    delete content.application.headerExtensions;
+    content.application.mux = false;
 
-    if (content.description.sources) {
-        content.description.sources = content.description.sources.filter(function (source) {
+    if (content.application.sources) {
+        content.application.sources = content.application.sources.filter(function (source) {
             return stream.id === source.parameters[1].value.split(' ')[0];
         });
     }
     // remove source groups not related to this stream
-    if (content.description.sourceGroups) {
-        content.description.sourceGroups = content.description.sourceGroups.filter(function (group) {
+    if (content.application.sourceGroups) {
+        content.application.sourceGroups = content.application.sourceGroups.filter(function (group) {
             var found = false;
-            for (var i = 0; i < content.description.sources.length; i++) {
-                if (content.description.sources[i].ssrc === group.sources[0]) {
+            for (var i = 0; i < content.application.sources.length; i++) {
+                if (content.application.sources[i].ssrc === group.sources[0]) {
                     found = true;
                     break;
                 }
@@ -35,7 +35,7 @@ function filterContentSources(content, stream) {
 
 function filterUnusedLabels(content) {
     // Remove mslabel and label ssrc-specific attributes
-    var sources = content.description.sources || [];
+    var sources = content.application.sources || [];
     sources.forEach(function (source) {
         source.parameters = source.parameters.filter(function (parameter) {
             return !(parameter.key === 'mslabel' || parameter.key === 'label');
@@ -116,9 +116,9 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             // https://code.google.com/p/webrtc/issues/detail?id=1553
             if (offerOptions && offerOptions.mandatory) {
                 offer.jingle.contents.forEach(function (content) {
-                    var mediaType = content.description.media;
+                    var mediaType = content.application.media;
 
-                    if (!content.description || content.description.descType !== 'rtp') {
+                    if (!content.description || content.application.applicationType !== 'rtp') {
                         return;
                     }
 
@@ -159,8 +159,15 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         };
 
         self.constraints = constraints;
-
         next = next || function () {};
+        opts = opts || {};
+
+        self.constraints = opts.constraints || {
+            mandatory: {
+                OfferToReceiveAudio: true,
+                OfferToReceiveVideo: true
+            }
+        };
 
         this._log('info', 'Accepted incoming session');
 
@@ -319,7 +326,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             filterContentSources(content, stream);
         });
         desc.contents = desc.contents.filter(function (content) {
-            return content.description.descType === 'rtp' && content.description.sources && content.description.sources.length;
+            return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
         });
         delete desc.groups;
 
@@ -375,14 +382,13 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         var desc = this.pc.localDescription;
         desc.contents.forEach(function (content) {
             delete content.transport;
-            delete content.description.payloads;
+            delete content.application.payloads;
         });
 
         this.pc.removeStream(oldStream);
         this.send('source-remove', desc);
 
         this.pc.addStream(newStream);
-
         if (this.pc.isInitiator) {
             this.pc.offer(self.constraints, function (err, offer) {
                 if (err) {
@@ -391,7 +397,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 }
                 offer.jingle.contents.forEach(function (content) {
                     delete content.transport;
-                    delete content.description.payloads;
+                    delete content.application.payloads;
                 });
                 self.pc.handleAnswer({
                     type: 'answer',
@@ -437,7 +443,6 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     onIceCandidate: function (opts, candidate) {
         this._log('info', 'Discovered new ICE candidate', candidate.jingle);
         this.send('transport-info', candidate.jingle);
-
         if (opts.signalEndOfCandidates) {
             this.lastCandidate = candidate;
         }
@@ -448,7 +453,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         if (opts.signalEndOfCandidates && this.lastCandidate) {
             var endOfCandidates = this.lastCandidate.jingle;
             endOfCandidates.contents[0].transport = {
-                transType: endOfCandidates.contents[0].transport.transType,
+                transportType: endOfCandidates.contents[0].transport.transportType,
                 gatheringComplete: true
             };
             this.lastCandidate = null;
@@ -610,7 +615,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         var newDesc = this.pc.remoteDescription;
         this.pc.remoteDescription.contents.forEach(function (content, idx) {
-            var desc = content.description;
+            var desc = content.application;
             var ssrcs = desc.sources || [];
             var groups = desc.sourceGroups || [];
 
@@ -619,15 +624,15 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     return;
                 }
 
-                var newContentDesc = newContent.description;
+                var newContentDesc = newContent.application;
                 var newSSRCs = newContentDesc.sources || [];
 
                 ssrcs = ssrcs.concat(newSSRCs);
-                newDesc.contents[idx].description.sources = JSON.parse(JSON.stringify(ssrcs));
+                newDesc.contents[idx].application.sources = JSON.parse(JSON.stringify(ssrcs));
 
                 var newGroups = newContentDesc.sourceGroups || [];
                 groups = groups.concat(newGroups);
-                newDesc.contents[idx].description.sourceGroups = JSON.parse(JSON.stringify(groups));
+                newDesc.contents[idx].application.sourceGroups = JSON.parse(JSON.stringify(groups));
             });
         });
 
@@ -683,7 +688,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         var newDesc = this.pc.remoteDescription;
         this.pc.remoteDescription.contents.forEach(function (content, idx) {
-            var desc = content.description;
+            var desc = content.application;
             var ssrcs = desc.sources || [];
             var groups = desc.sourceGroups || [];
 
@@ -692,7 +697,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     return;
                 }
 
-                var newContentDesc = newContent.description;
+                var newContentDesc = newContent.application;
                 var newSSRCs = newContentDesc.sources || [];
                 var newGroups = newContentDesc.sourceGroups || [];
 
@@ -709,7 +714,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     }
                     if (found > -1) {
                         ssrcs.splice(found, 1);
-                        newDesc.contents[idx].description.sources = JSON.parse(JSON.stringify(ssrcs));
+                        newDesc.contents[idx].application.sources = JSON.parse(JSON.stringify(ssrcs));
                     }
                 }
 
@@ -734,7 +739,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     }
                     if (found > -1) {
                         groups.splice(found, 1);
-                        newDesc.contents[idx].description.sourceGroups = JSON.parse(JSON.stringify(groups));
+                        newDesc.contents[idx].application.sourceGroups = JSON.parse(JSON.stringify(groups));
                     }
                 }
             });
