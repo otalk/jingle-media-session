@@ -268,7 +268,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                         filterContentSources(content, stream);
                     });
                     offer.jingle.contents = offer.jingle.contents.filter(function (content) {
-                        return content.description.descType === 'rtp' && content.description.sources && content.description.sources.length;
+                        return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
                     });
                     delete offer.jingle.groups;
 
@@ -294,7 +294,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                         filterContentSources(content, stream);
                     });
                     answer.jingle.contents = answer.jingle.contents.filter(function (content) {
-                        return content.description.descType === 'rtp' && content.description.sources && content.description.sources.length;
+                        return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
                     });
                     delete answer.jingle.groups;
 
@@ -427,7 +427,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                     }
                     answer.jingle.contents.forEach(function (content) {
                         delete content.transport;
-                        delete content.description.payloads;
+                        delete content.application.payloads;
                     });
                     self.send('source-add', answer.jingle);
                     cb();
