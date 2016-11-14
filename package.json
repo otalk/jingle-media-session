@@ -1,27 +1,28 @@
 {
-  "name": "jingle-media-session",
+  "name": "jingle-media-session-purecloud",
   "version": "2.1.0",
-  "author": "Lance Stout <lance@andyet.net>",
-  "bugs": "https://github.com/otalk/jingle-media-session/issues",
+  "author": "Xander Dumaine <xander.dumaine@inin.com>",
+  "bugs": "https://github.com/xdumaine/jingle-media-session/issues",
   "contributors": [
-    "Philipp Hancke <fippo@andyet.net>"
+    "Philipp Hancke <fippo@andyet.net>",
+    "Lance Stout"
   ],
   "dependencies": {
     "extend-object": "^1.0.0",
     "jingle-session": "^2.0.0",
-    "rtcpeerconnection": "^5.0.0"
+    "rtcpeerconnection": "6.0.0"
   },
   "devDependencies": {
     "browserify": "^5.11.1",
     "covert": "^1.0.0",
-    "jshint": "^2.5.5",
+    "jshint": "^2.6.3",
     "nsp": "^0.2.6",
     "precommit-hook": "^1.0.7",
     "tap-spec": "^0.2.1",
     "tape": "^2.14.0",
     "uglify-js": "^2.4.15"
   },
-  "homepage": "https://github.com/otalk/jingle-media-session",
+  "homepage": "https://github.com/xdumaine/jingle-media-session",
   "keywords": [
     "webrtc",
     "xmpp",
@@ -31,7 +32,7 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/otalk/jingle-media-session.git"
+    "url": "https://github.com/xdumaine/jingle-media-session.git"
   },
   "scripts": {
     "audit": "make audit",

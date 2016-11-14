@@ -54,7 +54,7 @@ function MediaSession(opts) {
 
     this.pc.on('ice', this.onIceCandidate.bind(this, opts));
     this.pc.on('endOfCandidates', this.onIceEndOfCandidates.bind(this, opts));
-    this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this));
+    this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this, opts));
     this.pc.on('addStream', this.onAddStream.bind(this));
     this.pc.on('removeStream', this.onRemoveStream.bind(this));
     this.pc.on('addChannel', this.onAddChannel.bind(this));
@@ -151,6 +151,17 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         next = next || function () {};
         opts = opts || {};
 
+        var constraints = opts.constraints || {
+            mandatory: {
+                OfferToReceiveAudio: true,
+                OfferToReceiveVideo: true
+            }
+        };
+
+        self.constraints = constraints;
+        next = next || function () {};
+        opts = opts || {};
+
         self.constraints = opts.constraints || {
             mandatory: {
                 OfferToReceiveAudio: true,
@@ -239,31 +250,59 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             self.constraints = renegotiate;
         }
 
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: this.pc.remoteDescription
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Could not create offer for adding new stream');
-                return cb(err);
-            }
-            self.pc.answer(self.constraints, function (err, answer) {
+        if (this.pc.isInitiator) {
+            this.pc.offer(self.constraints, function (err, offer) {
                 if (err) {
-                    self._log('error', 'Could not create answer for adding new stream');
+                    self._log('error', 'Could not create offer for adding new stream');
                     return cb(err);
                 }
-                answer.jingle.contents.forEach(function (content) {
-                    filterContentSources(content, stream);
-                });
-                answer.jingle.contents = answer.jingle.contents.filter(function (content) {
-                    return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
-                });
-                delete answer.jingle.groups;
+                self.pc.handleAnswer({
+                    type: 'answer',
+                    jingle: self.pc.remoteDescription
+                }, function (err) {
+                    if (err) {
+                        self._log('error', 'Could not process answer for adding new stream');
+                        return cb(err);
+                    }
+                    offer.jingle.contents.forEach(function (content) {
+                        filterContentSources(content, stream);
+                    });
+                    offer.jingle.contents = offer.jingle.contents.filter(function (content) {
+                        return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
+                    });
+                    delete offer.jingle.groups;
 
-                self.send('source-add', answer.jingle);
-                cb();
+                    self.send('source-add', offer.jingle);
+                    cb();
+                });
             });
-        });
+        } else {
+            this.pc.handleOffer({
+                type: 'offer',
+                jingle: this.pc.remoteDescription
+            }, function (err) {
+                if (err) {
+                    self._log('error', 'Could not process offer for adding new stream');
+                    return cb(err);
+                }
+                self.pc.answer(self.constraints, function (err, answer) {
+                    if (err) {
+                        self._log('error', 'Could not create answer for adding new stream');
+                        return cb(err);
+                    }
+                    answer.jingle.contents.forEach(function (content) {
+                        filterContentSources(content, stream);
+                    });
+                    answer.jingle.contents = answer.jingle.contents.filter(function (content) {
+                        return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
+                    });
+                    delete answer.jingle.groups;
+
+                    self.send('source-add', answer.jingle);
+                    cb();
+                });
+            });
+        }
     },
 
     addStream2: function (stream, cb) {
@@ -294,22 +333,41 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.send('source-remove', desc);
         this.pc.removeStream(stream);
 
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: this.pc.remoteDescription
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Could not process offer for removing stream');
-                return cb(err);
-            }
-            self.pc.answer(self.constraints, function (err) {
+        if (this.pc.isInitiator) {
+            this.pc.offer(self.constraints, function (err) {
                 if (err) {
-                    self._log('error', 'Could not process answer for removing stream');
+                    self._log('error', 'Could not create offer for removing stream');
                     return cb(err);
                 }
-                cb();
+                self.pc.handleAnswer({
+                    type: 'answer',
+                    jingle: self.pc.remoteDescription
+                }, function (err) {
+                    if (err) {
+                        self._log('error', 'Could not process answer for removing stream');
+                        return cb(err);
+                    }
+                    cb();
+                });
             });
-        });
+        } else {
+            this.pc.handleOffer({
+                type: 'offer',
+                jingle: this.pc.remoteDescription
+            }, function (err) {
+                if (err) {
+                    self._log('error', 'Could not process offer for removing stream');
+                    return cb(err);
+                }
+                self.pc.answer(self.constraints, function (err) {
+                    if (err) {
+                        self._log('error', 'Could not create answer for removing stream');
+                        return cb(err);
+                    }
+                    cb();
+                });
+            });
+        }
     },
 
     removeStream2: function (stream, cb) {
@@ -331,27 +389,51 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.send('source-remove', desc);
 
         this.pc.addStream(newStream);
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: this.pc.remoteDescription
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Could not process offer for switching streams');
-                return cb(err);
-            }
-            self.pc.answer(self.constraints, function (err, answer) {
+        if (this.pc.isInitiator) {
+            this.pc.offer(self.constraints, function (err, offer) {
                 if (err) {
-                    self._log('error', 'Could not process answer for switching streams');
+                    self._log('error', 'Could not create offer for switching streams');
                     return cb(err);
                 }
-                answer.jingle.contents.forEach(function (content) {
+                offer.jingle.contents.forEach(function (content) {
                     delete content.transport;
                     delete content.application.payloads;
                 });
-                self.send('source-add', answer.jingle);
-                cb();
+                self.pc.handleAnswer({
+                    type: 'answer',
+                    jingle: self.pc.remoteDescription
+                }, function (err) {
+                    if (err) {
+                        self._log('error', 'Could not process answer for switching streams');
+                        return cb(err);
+                    }
+                    self.send('source-add', offer.jingle);
+                    cb();
+                });
             });
-        });
+        } else {
+            this.pc.handleOffer({
+                type: 'offer',
+                jingle: this.pc.remoteDescription
+            }, function (err) {
+                if (err) {
+                    self._log('error', 'Could not process offer for switching streams');
+                    return cb(err);
+                }
+                self.pc.answer(self.constraints, function (err, answer) {
+                    if (err) {
+                        self._log('error', 'Could not create answer for switching streams');
+                        return cb(err);
+                    }
+                    answer.jingle.contents.forEach(function (content) {
+                        delete content.transport;
+                        delete content.application.payloads;
+                    });
+                    self.send('source-add', answer.jingle);
+                    cb();
+                });
+            });
+        }
     },
 
     // ----------------------------------------------------------------
@@ -368,7 +450,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
     onIceEndOfCandidates: function (opts) {
         this._log('info', 'ICE end of candidates');
-        if (opts.signalEndOfCandidates) {
+        if (opts.signalEndOfCandidates && this.lastCandidate) {
             var endOfCandidates = this.lastCandidate.jingle;
             endOfCandidates.contents[0].transport = {
                 transportType: endOfCandidates.contents[0].transport.transportType,
@@ -376,13 +458,26 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             };
             this.lastCandidate = null;
             this.send('transport-info', endOfCandidates);
+        } else if (this.connectionState !== 'connecting') {
+            var callInfo = {
+                msg: 'ICE End of candidates signaled with no candidates gathered.',
+                signalingState: this.pc && this.pc.signalingState,
+                connectionState: this.connectionState,
+                localDescription: this.pc && this.pc.localDescription && this.pc.localDescription.sdp,
+                remoteDescription: this.pc && this.pc.remoteDescription && this.pc.remoteDescription.sdp,
+                sid: this.sid
+            };
+            this.emit('log:warn', callInfo);
         }
     },
 
-    onIceStateChange: function () {
+    onIceStateChange: function (opts) {
         switch (this.pc.iceConnectionState) {
             case 'checking':
                 this.connectionState = 'connecting';
+                if (opts && opts.signalEndOfCandidates) {
+                    this.onIceEndOfCandidates(opts);
+                }
                 break;
             case 'completed':
             case 'connected':
@@ -541,27 +636,50 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             });
         });
 
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: newDesc
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Error adding new stream source');
-                return cb({
-                    condition: 'general-error'
-                });
-            }
-
-            self.pc.answer(self.constraints, function (err) {
+        if (this.pc.isInitiator) {
+            this.pc.offer(this.constraints, function (err) {
                 if (err) {
                     self._log('error', 'Error adding new stream source');
                     return cb({
                         condition: 'general-error'
                     });
                 }
-                cb();
+                self.pc.handleAnswer({
+                    type: 'answer',
+                    jingle: newDesc
+                }, function (err) {
+                    if (err) {
+                        self._log('error', 'Error adding new stream source');
+                        return cb({
+                            condition: 'general-error'
+                        });
+                    }
+                    cb();
+                });
             });
-        });
+        } else {
+            this.pc.handleOffer({
+                type: 'offer',
+                jingle: newDesc
+            }, function (err) {
+                if (err) {
+                    self._log('error', 'Error adding new stream source');
+                    return cb({
+                        condition: 'general-error'
+                    });
+                }
+
+                self.pc.answer(self.constraints, function (err) {
+                    if (err) {
+                        self._log('error', 'Error adding new stream source');
+                        return cb({
+                            condition: 'general-error'
+                        });
+                    }
+                    cb();
+                });
+            });
+        }
     },
 
     onSourceRemove: function (changes, cb) {
@@ -627,26 +745,49 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             });
         });
 
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: newDesc
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Error removing stream source');
-                return cb({
-                    condition: 'general-error'
-                });
-            }
-            self.pc.answer(self.constraints, function (err) {
+        if (this.pc.isInitiator) {
+            this.pc.offer(this.constraints, function (err) {
                 if (err) {
                     self._log('error', 'Error removing stream source');
                     return cb({
                         condition: 'general-error'
                     });
                 }
-                cb();
+                self.pc.handleAnswer({
+                    type: 'answer',
+                    jingle: newDesc
+                }, function (err) {
+                    if (err) {
+                        self._log('error', 'Error removing stream source');
+                        return cb({
+                            condition: 'general-error'
+                        });
+                    }
+                    cb();
+                });
             });
-        });
+        } else {
+            this.pc.handleOffer({
+                type: 'offer',
+                jingle: newDesc
+            }, function (err) {
+                if (err) {
+                    self._log('error', 'Error removing stream source');
+                    return cb({
+                        condition: 'general-error'
+                    });
+                }
+                self.pc.answer(self.constraints, function (err) {
+                    if (err) {
+                        self._log('error', 'Error removing stream source');
+                        return cb({
+                            condition: 'general-error'
+                        });
+                    }
+                    cb();
+                });
+            });
+        }
     },
 
     // ----------------------------------------------------------------
