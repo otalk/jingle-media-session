@@ -175,15 +175,15 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     accept: function (opts, next) {
         var self = this;
 
-        var acceptAction = function(done){
-          // support calling with accept(next) or accept(opts, next)
-          if (arguments.length === 1 && typeof opts === 'function') {
-              next = opts;
-              opts = {};
-          }
-          next = next || function () {};
-          opts = opts || {};
+        // support calling with accept(next) or accept(opts, next)
+        if (arguments.length === 1 && typeof opts === 'function') {
+            next = opts;
+            opts = {};
+        }
+        next = next || function () {};
+        opts = opts || {};
 
+        var acceptAction = function(done){
           self.constraints = opts.constraints || {
               mandatory: {
                   OfferToReceiveAudio: true,
