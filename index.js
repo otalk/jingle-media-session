@@ -51,8 +51,6 @@ function MediaSession(opts) {
         useJingle: true
     }, opts.constraints || {});
 
-    this.actions = [];
-
     this.pc.on('ice', this.onIceCandidate.bind(this, opts));
     this.pc.on('endOfCandidates', this.onIceEndOfCandidates.bind(this, opts));
     this.pc.on('iceConnectionStateChange', this.onIceStateChange.bind(this));
@@ -65,6 +63,8 @@ function MediaSession(opts) {
     }
 
     this._ringing = false;
+
+    this._actions = [];
 }
 
 
@@ -100,24 +100,24 @@ MediaSession.prototype = extend(MediaSession.prototype, {
   // "Queue" for serializing async actions
   // ----------------------------------------------------------------
 
-    act: function(action){
+    _queue: function(action){
       var self = this;
-      self.actions.push(action);
-      if(self.actions.length > 1){
+      self._actions.push(action);
+      if(self._actions.length > 1){
         return;
       }
-      self.actNext();
+      self._actNext();
     },
 
-    actNext: function(){
+    _actNext: function(){
       var self = this;
-      var next = self.actions[0];
+      var next = self._actions[0];
       if(!next){
         return;
       }
       next(function(){
-        self.actions.shift();
-        self.actNext();
+        self._actions.shift();
+        self._actNext();
       });
     },
 
@@ -125,51 +125,82 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // Session control methods
     // ----------------------------------------------------------------
 
+    _start: function (offerOptions, next, done) {
+      var self = this;
+      self.state = 'pending';
+
+      next = next || function () {};
+
+      self.pc.isInitiator = true;
+      self.pc.offer(offerOptions, function (err, offer) {
+          if (err) {
+              self._log('error', 'Could not create WebRTC offer', err);
+              self.end('failed-application', true);
+              return done();
+          }
+
+          // a workaround for missing a=sendonly
+          // https://code.google.com/p/webrtc/issues/detail?id=1553
+          if (offerOptions && offerOptions.mandatory) {
+              offer.jingle.contents.forEach(function (content) {
+                  var mediaType = content.application.media;
+
+                  if (!content.description || content.application.applicationType !== 'rtp') {
+                      return;
+                  }
+
+                  if (!offerOptions.mandatory.OfferToReceiveAudio && mediaType === 'audio') {
+                      content.senders = 'initiator';
+                  }
+
+                  if (!offerOptions.mandatory.OfferToReceiveVideo && mediaType === 'video') {
+                      content.senders = 'initiator';
+                  }
+              });
+          }
+
+          offer.jingle.contents.forEach(filterUnusedLabels);
+
+          self.send('session-initiate', offer.jingle);
+          next();
+          done();
+      });
+    },
+
     start: function (offerOptions, next) {
         var self = this;
+        self._queue(function(done){
+          self._start(offerOptions, next, done);
+        });
+    },
 
-        var startAction = function(done){
-          self.state = 'pending';
-
-          next = next || function () {};
-
-          self.pc.isInitiator = true;
-          self.pc.offer(offerOptions, function (err, offer) {
-              if (err) {
-                  self._log('error', 'Could not create WebRTC offer', err);
-                  self.end('failed-application', true);
-                  return done();
-              }
-
-              // a workaround for missing a=sendonly
-              // https://code.google.com/p/webrtc/issues/detail?id=1553
-              if (offerOptions && offerOptions.mandatory) {
-                  offer.jingle.contents.forEach(function (content) {
-                      var mediaType = content.application.media;
-
-                      if (!content.description || content.application.applicationType !== 'rtp') {
-                          return;
-                      }
-
-                      if (!offerOptions.mandatory.OfferToReceiveAudio && mediaType === 'audio') {
-                          content.senders = 'initiator';
-                      }
-
-                      if (!offerOptions.mandatory.OfferToReceiveVideo && mediaType === 'video') {
-                          content.senders = 'initiator';
-                      }
-                  });
-              }
-
-              offer.jingle.contents.forEach(filterUnusedLabels);
-
-              self.send('session-initiate', offer.jingle);
-              next();
-              done();
-          });
+    _accept: function (opts, next, done) {
+        var self = this;
+        self.constraints = opts.constraints || {
+            mandatory: {
+                OfferToReceiveAudio: true,
+                OfferToReceiveVideo: true
+            }
         };
 
-        self.act(startAction);
+        self._log('info', 'Accepted incoming session');
+
+        self.state = 'active';
+
+        self.pc.answer(self.constraints, function (err, answer) {
+            if (err) {
+                self._log('error', 'Could not create WebRTC answer', err);
+                self.end('failed-application');
+                return done();
+            }
+
+            answer.jingle.contents.forEach(filterUnusedLabels);
+
+            self.send('session-accept', answer.jingle);
+
+            next();
+            done();
+        });
     },
 
     accept: function (opts, next) {
@@ -183,275 +214,267 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         next = next || function () {};
         opts = opts || {};
 
-        var acceptAction = function(done){
-          self.constraints = opts.constraints || {
-              mandatory: {
-                  OfferToReceiveAudio: true,
-                  OfferToReceiveVideo: true
-              }
-          };
+        self._queue(function(done){
+          self._accept(opts, next, done);
+        });
+    },
 
-          self._log('info', 'Accepted incoming session');
-
-          self.state = 'active';
-
-          self.pc.answer(self.constraints, function (err, answer) {
-              if (err) {
-                  self._log('error', 'Could not create WebRTC answer', err);
-                  self.end('failed-application');
-                  return done();
-              }
-
-              answer.jingle.contents.forEach(filterUnusedLabels);
-
-              self.send('session-accept', answer.jingle);
-
-              next();
-              done();
-          });
-        };
-
-        self.act(acceptAction);
+    _end: function (reason, silent, done) {
+      var self = this;
+      self.streams.forEach(function (stream) {
+          self.onRemoveStream({stream: stream});
+      });
+      self.pc.close();
+      BaseSession.prototype.end.call(self, reason, silent);
+      done();
     },
 
     end: function (reason, silent) {
         var self = this;
+        self._queue(function(done){
+          self._end(reason, silent, done);
+        });
+    },
 
-        var endAction = function(done){
-          self.streams.forEach(function (stream) {
-              self.onRemoveStream({stream: stream});
-          });
-          self.pc.close();
-          BaseSession.prototype.end.call(self, reason, silent);
-          done();
-        };
-
-        self.act(endAction);
+    _ring: function (done) {
+        var self = this;
+        self._log('info', 'Ringing on incoming session');
+        self.ringing = true;
+        self.send('session-info', {ringing: true});
+        done();
     },
 
     ring: function () {
         var self = this;
+        self._queue(function(done){
+          self._ring(done);
+        });
+    },
 
-        var ringAction = function(done){
-          self._log('info', 'Ringing on incoming session');
-          self.ringing = true;
-          self.send('session-info', {ringing: true});
-          done();
-        };
+    _mute: function (creator, name, done) {
+        var self = this;
+        self._log('info', 'Muting', name);
 
-        self.act(ringAction);
+        self.send('session-info', {
+            mute: {
+                creator: creator,
+                name: name
+            }
+        });
+        done();
     },
 
     mute: function (creator, name) {
         var self = this;
+        self._queue(function(done){
+          self._mute(creator, name, done);
+        });
+    },
 
-        var muteAction = function(done){
-          self._log('info', 'Muting', name);
-
-          self.send('session-info', {
-              mute: {
-                  creator: creator,
-                  name: name
-              }
-          });
-          done();
-        };
-
-        self.act(muteAction);
+    _unmute: function (creator, name, done) {
+        var self = this;
+        self._log('info', 'Unmuting', name);
+        self.send('session-info', {
+            unmute: {
+                creator: creator,
+                name: name
+            }
+        });
+        done();
     },
 
     unmute: function (creator, name) {
         var self = this;
+        self._queue(function(done){
+          self._unmute(creator, name, done);
+        });
+    },
 
-        var unmuteAction = function(done){
-          self._log('info', 'Unmuting', name);
-          self.send('session-info', {
-              unmute: {
-                  creator: creator,
-                  name: name
-              }
-          });
-          done();
-        };
-
-        self.act(unmuteAction);
+    _hold: function (done) {
+        var self = this;
+        self._log('info', 'Placing on hold');
+        self.send('session-info', {hold: true});
+        done();
     },
 
     hold: function () {
         var self = this;
+        self._queue(function(done){
+          self._hold(done);
+        });
+    },
 
-        var holdAction = function(done){
-          self._log('info', 'Placing on hold');
-          self.send('session-info', {hold: true});
-          done();
-        };
-
-        self.act(holdAction);
+    _resume: function (done) {
+        var self = this;
+        self._log('info', 'Resuming from hold');
+        self.send('session-info', {active: true});
+        done();
     },
 
     resume: function () {
         var self = this;
-
-        var resumeAction = function(done){
-          self._log('info', 'Resuming from hold');
-          self.send('session-info', {active: true});
-          done();
-        };
-
-        self.act(resumeAction);
+        self._queue(function(done){
+          self._resume(done);
+        });
     },
 
     // ----------------------------------------------------------------
     // Stream control methods
     // ----------------------------------------------------------------
 
+    _addStream: function (stream, renegotiate, cb, done) {
+        var self = this;
+        cb = cb || function () {};
+
+        self.pc.addStream(stream);
+
+        if (!renegotiate) {
+            return done();
+        } else if (typeof renegotiate === 'object') {
+            self.constraints = renegotiate;
+        }
+
+        self.pc.handleOffer({
+            type: 'offer',
+            jingle: self.pc.remoteDescription
+        }, function (err) {
+            if (err) {
+                self._log('error', 'Could not create offer for adding new stream');
+                cb(err);
+                return done();
+            }
+            self.pc.answer(self.constraints, function (err, answer) {
+                if (err) {
+                    self._log('error', 'Could not create answer for adding new stream');
+                    cb(err);
+                    return done();
+                }
+                answer.jingle.contents.forEach(function (content) {
+                    filterContentSources(content, stream);
+                });
+                answer.jingle.contents = answer.jingle.contents.filter(function (content) {
+                    return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
+                });
+                delete answer.jingle.groups;
+
+                self.send('source-add', answer.jingle);
+                cb();
+                done();
+            });
+        });
+    },
+
     addStream: function (stream, renegotiate, cb) {
         var self = this;
-
-        var addStreamAction = function(done){
-          cb = cb || function () {};
-
-          self.pc.addStream(stream);
-
-          if (!renegotiate) {
-              return done();
-          } else if (typeof renegotiate === 'object') {
-              self.constraints = renegotiate;
-          }
-
-          self.pc.handleOffer({
-              type: 'offer',
-              jingle: self.pc.remoteDescription
-          }, function (err) {
-              if (err) {
-                  self._log('error', 'Could not create offer for adding new stream');
-                  cb(err);
-                  return done();
-              }
-              self.pc.answer(self.constraints, function (err, answer) {
-                  if (err) {
-                      self._log('error', 'Could not create answer for adding new stream');
-                      cb(err);
-                      return done();
-                  }
-                  answer.jingle.contents.forEach(function (content) {
-                      filterContentSources(content, stream);
-                  });
-                  answer.jingle.contents = answer.jingle.contents.filter(function (content) {
-                      return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
-                  });
-                  delete answer.jingle.groups;
-
-                  self.send('source-add', answer.jingle);
-                  cb();
-                  done();
-              });
-          });
-        };
-
-        self.act(addStreamAction);
+        self._queue(function(done){
+          self._addStream(stream, renegotiate, cb, done);
+        });
     },
 
     addStream2: function (stream, cb) {
         this.addStream(stream, true, cb);
     },
 
+    _removeStream: function (stream, renegotiate, cb, done) {
+        var self = this;
+        cb = cb || function () {};
+
+        if (!renegotiate) {
+            self.pc.removeStream(stream);
+            return done();
+        } else if (typeof renegotiate === 'object') {
+            self.constraints = renegotiate;
+        }
+
+        var desc = self.pc.localDescription;
+        desc.contents.forEach(function (content) {
+            filterContentSources(content, stream);
+        });
+        desc.contents = desc.contents.filter(function (content) {
+            return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
+        });
+        delete desc.groups;
+
+        self.send('source-remove', desc);
+        self.pc.removeStream(stream);
+
+        self.pc.handleOffer({
+            type: 'offer',
+            jingle: self.pc.remoteDescription
+        }, function (err) {
+            if (err) {
+                self._log('error', 'Could not process offer for removing stream');
+                cb(err);
+                return done();
+            }
+            self.pc.answer(self.constraints, function (err) {
+                if (err) {
+                    self._log('error', 'Could not process answer for removing stream');
+                    cb(err);
+                    return done();
+                }
+                cb();
+                done();
+            });
+        });
+    },
+
     removeStream: function (stream, renegotiate, cb) {
         var self = this;
-
-        var removeStreamAction = function(done){
-          cb = cb || function () {};
-
-          if (!renegotiate) {
-              self.pc.removeStream(stream);
-              return done();
-          } else if (typeof renegotiate === 'object') {
-              self.constraints = renegotiate;
-          }
-
-          var desc = self.pc.localDescription;
-          desc.contents.forEach(function (content) {
-              filterContentSources(content, stream);
-          });
-          desc.contents = desc.contents.filter(function (content) {
-              return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
-          });
-          delete desc.groups;
-
-          self.send('source-remove', desc);
-          self.pc.removeStream(stream);
-
-          self.pc.handleOffer({
-              type: 'offer',
-              jingle: self.pc.remoteDescription
-          }, function (err) {
-              if (err) {
-                  self._log('error', 'Could not process offer for removing stream');
-                  cb(err);
-                  return done();
-              }
-              self.pc.answer(self.constraints, function (err) {
-                  if (err) {
-                      self._log('error', 'Could not process answer for removing stream');
-                      cb(err);
-                      return done();
-                  }
-                  cb();
-                  done();
-              });
-          });
-        };
-
-        self.act(removeStreamAction);
+        self._queue(function(done){
+          self._removeStream(stream, renegotiate, cb, done);
+        });
     },
 
     removeStream2: function (stream, cb) {
         this.removeStream(stream, true, cb);
     },
 
+    _switchStream: function (oldStream, newStream, cb, done) {
+        var self = this;
+        cb = cb || function () {};
+
+        var desc = self.pc.localDescription;
+        desc.contents.forEach(function (content) {
+            delete content.transport;
+            delete content.application.payloads;
+        });
+
+        self.pc.removeStream(oldStream);
+        self.send('source-remove', desc);
+
+        self.pc.addStream(newStream);
+        self.pc.handleOffer({
+            type: 'offer',
+            jingle: self.pc.remoteDescription
+        }, function (err) {
+            if (err) {
+                self._log('error', 'Could not process offer for switching streams');
+                cb(err);
+                return done();
+            }
+            self.pc.answer(self.constraints, function (err, answer) {
+                if (err) {
+                    self._log('error', 'Could not process answer for switching streams');
+                    cb(err);
+                    return done();
+                }
+                answer.jingle.contents.forEach(function (content) {
+                    delete content.transport;
+                    delete content.application.payloads;
+                });
+                self.send('source-add', answer.jingle);
+                cb();
+                done();
+            });
+        });
+    },
+
     switchStream: function (oldStream, newStream, cb) {
         var self = this;
-
-        var switchStreamAction = function(done){
-          cb = cb || function () {};
-
-          var desc = self.pc.localDescription;
-          desc.contents.forEach(function (content) {
-              delete content.transport;
-              delete content.application.payloads;
-          });
-
-          self.pc.removeStream(oldStream);
-          self.send('source-remove', desc);
-
-          self.pc.addStream(newStream);
-          self.pc.handleOffer({
-              type: 'offer',
-              jingle: self.pc.remoteDescription
-          }, function (err) {
-              if (err) {
-                  self._log('error', 'Could not process offer for switching streams');
-                  cb(err);
-                  return done();
-              }
-              self.pc.answer(self.constraints, function (err, answer) {
-                  if (err) {
-                      self._log('error', 'Could not process answer for switching streams');
-                      cb(err);
-                      return done();
-                  }
-                  answer.jingle.contents.forEach(function (content) {
-                      delete content.transport;
-                      delete content.application.payloads;
-                  });
-                  self.send('source-add', answer.jingle);
-                  cb();
-                  done();
-              });
-          });
-        };
-
-        self.act(switchStreamAction);
+        self._queue(function(done){
+          self._switchStream(oldStream, newStream, cb, done);
+        });
     },
 
     // ----------------------------------------------------------------
@@ -523,283 +546,296 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // Jingle action handers
     // ----------------------------------------------------------------
 
+    _onSessionInitiate: function (changes, cb, done) {
+        var self = this;
+        self._log('info', 'Initiating incoming session');
+
+        self.state = 'pending';
+
+        self.pc.isInitiator = false;
+        self.pc.handleOffer({
+            type: 'offer',
+            jingle: changes
+        }, function (err) {
+            if (err) {
+                self._log('error', 'Could not create WebRTC answer');
+                cb({condition: 'general-error'});
+                return done();
+            }
+            cb();
+            done();
+        });
+    },
+
     onSessionInitiate: function (changes, cb) {
         var self = this;
+        self._queue(function(done){
+          self._onSessionInitiate(changes, cb, done);
+        });
+    },
 
-        var onSessionInitiateAction = function(done){
-          self._log('info', 'Initiating incoming session');
-
-          self.state = 'pending';
-
-          self.pc.isInitiator = false;
-          self.pc.handleOffer({
-              type: 'offer',
-              jingle: changes
-          }, function (err) {
-              if (err) {
-                  self._log('error', 'Could not create WebRTC answer');
-                  cb({condition: 'general-error'});
-                  return done();
-              }
-              cb();
-              done();
-          });
-        };
-
-        self.act(onSessionInitiateAction);
+    _onSessionAccept: function (changes, cb, done) {
+        var self = this;
+        self.state = 'active';
+        self.pc.handleAnswer({
+            type: 'answer',
+            jingle: changes
+        }, function (err) {
+            if (err) {
+                self._log('error', 'Could not process WebRTC answer');
+                cb({condition: 'general-error'});
+                return done();
+            }
+            self.emit('accepted', self);
+            cb();
+            done();
+        });
     },
 
     onSessionAccept: function (changes, cb) {
         var self = this;
+        self._queue(function(done){
+          self._onSessionAccept(changes, cb, done);
+        });
+    },
 
-        var onSessionAcceptAction = function(done){
-          self.state = 'active';
-          self.pc.handleAnswer({
-              type: 'answer',
-              jingle: changes
-          }, function (err) {
-              if (err) {
-                  self._log('error', 'Could not process WebRTC answer');
-                  cb({condition: 'general-error'});
-                  return done();
-              }
-              self.emit('accepted', self);
-              cb();
-              done();
-          });
-        };
+    _onSessionTerminate: function (changes, cb, done) {
+        var self = this;
+        self._log('info', 'Terminating session');
+        self.streams.forEach(function (stream) {
+            self.onRemoveStream({stream: stream});
+        });
+        self.pc.close();
+        BaseSession.prototype.end.call(self, changes.reason, true);
 
-        self.act(onSessionAcceptAction);
+        cb();
+        done();
     },
 
     onSessionTerminate: function (changes, cb) {
         var self = this;
+        self._queue(function(done){
+          self._onSessionTerminate(changes, cb, done);
+        });
+    },
 
-        var onSessionTerminateAction = function(done){
+    _onSessionInfo: function (info, cb, done) {
+        var self = this;
+        if (info.ringing) {
+            self._log('info', 'Outgoing session is ringing');
+            self.ringing = true;
+            self.emit('ringing', self);
+            cb();
+            return done();
+        }
 
-          self._log('info', 'Terminating session');
-          self.streams.forEach(function (stream) {
-              self.onRemoveStream({stream: stream});
-          });
-          self.pc.close();
-          BaseSession.prototype.end.call(self, changes.reason, true);
+        if (info.hold) {
+            self._log('info', 'On hold');
+            self.emit('hold', self);
+            cb();
+            return done();
+        }
 
-          cb();
-          done();
-        };
+        if (info.active) {
+            self._log('info', 'Resuming from hold');
+            self.emit('resumed', self);
+            cb();
+            return done();
+        }
 
-        self.act(onSessionTerminateAction);
+        if (info.mute) {
+            self._log('info', 'Muting', info.mute);
+            self.emit('mute', self, info.mute);
+            cb();
+            return done();
+        }
+
+        if (info.unmute) {
+            self._log('info', 'Unmuting', info.unmute);
+            self.emit('unmute', self, info.unmute);
+            cb();
+            return done();
+        }
+
+        cb();
+        done();
     },
 
     onSessionInfo: function (info, cb) {
         var self = this;
+        self._queue(function(done){
+          self._onSessionInfo(info, cb, done);
+        });
+    },
 
-        var onSessionInfoAction = function(done){
-          if (info.ringing) {
-              self._log('info', 'Outgoing session is ringing');
-              self.ringing = true;
-              self.emit('ringing', self);
-              cb();
-              return done();
-          }
-
-          if (info.hold) {
-              self._log('info', 'On hold');
-              self.emit('hold', self);
-              cb();
-              return done();
-          }
-
-          if (info.active) {
-              self._log('info', 'Resuming from hold');
-              self.emit('resumed', self);
-              cb();
-              return done();
-          }
-
-          if (info.mute) {
-              self._log('info', 'Muting', info.mute);
-              self.emit('mute', self, info.mute);
-              cb();
-              return done();
-          }
-
-          if (info.unmute) {
-              self._log('info', 'Unmuting', info.unmute);
-              self.emit('unmute', self, info.unmute);
-              cb();
-              return done();
-          }
-
+    _onTransportInfo: function (changes, cb, done) {
+      var self = this;
+      self.pc.processIce(changes, function () {
           cb();
           done();
-        };
-
-        self.act(onSessionInfoAction);
+      });
     },
 
     onTransportInfo: function (changes, cb) {
       var self = this;
+      self._queue(function(done){
+        self._onTransportInfo(changes, cb, done);
+      });
+    },
 
-      var onTransportInfoAction = function(done){
-        self.pc.processIce(changes, function () {
-            cb();
-            done();
+    _onSourceAdd: function (changes, cb, done) {
+        var self = this;
+        self._log('info', 'Adding new stream source');
+
+        var newDesc = self.pc.remoteDescription;
+        self.pc.remoteDescription.contents.forEach(function (content, idx) {
+            var desc = content.application;
+            var ssrcs = desc.sources || [];
+            var groups = desc.sourceGroups || [];
+
+            changes.contents.forEach(function (newContent) {
+                if (content.name !== newContent.name) {
+                    return;
+                }
+
+                var newContentDesc = newContent.application;
+                var newSSRCs = newContentDesc.sources || [];
+
+                ssrcs = ssrcs.concat(newSSRCs);
+                newDesc.contents[idx].application.sources = JSON.parse(JSON.stringify(ssrcs));
+
+                var newGroups = newContentDesc.sourceGroups || [];
+                groups = groups.concat(newGroups);
+                newDesc.contents[idx].application.sourceGroups = JSON.parse(JSON.stringify(groups));
+            });
         });
-      };
 
-      self.act(onTransportInfoAction);
+        self.pc.handleOffer({
+            type: 'offer',
+            jingle: newDesc
+        }, function (err) {
+            if (err) {
+                self._log('error', 'Error adding new stream source');
+                cb({
+                    condition: 'general-error'
+                });
+                return done();
+            }
+
+            self.pc.answer(self.constraints, function (err) {
+                if (err) {
+                    self._log('error', 'Error adding new stream source');
+                    cb({
+                        condition: 'general-error'
+                    });
+                    return done();
+                }
+                cb();
+                done();
+            });
+        });
     },
 
     onSourceAdd: function (changes, cb) {
         var self = this;
+        self._queue(function(done){
+          self._onSourceAdd(changes, cb, done);
+        });
+    },
 
-        var onSourceAddAction = function(done){
-          self._log('info', 'Adding new stream source');
+    _onSourceRemove: function (changes, cb, done) {
+        var self = this;
+        self._log('info', 'Removing stream source');
 
-          var newDesc = self.pc.remoteDescription;
-          self.pc.remoteDescription.contents.forEach(function (content, idx) {
-              var desc = content.application;
-              var ssrcs = desc.sources || [];
-              var groups = desc.sourceGroups || [];
+        var newDesc = self.pc.remoteDescription;
+        self.pc.remoteDescription.contents.forEach(function (content, idx) {
+            var desc = content.application;
+            var ssrcs = desc.sources || [];
+            var groups = desc.sourceGroups || [];
 
-              changes.contents.forEach(function (newContent) {
-                  if (content.name !== newContent.name) {
-                      return;
-                  }
+            changes.contents.forEach(function (newContent) {
+                if (content.name !== newContent.name) {
+                    return;
+                }
 
-                  var newContentDesc = newContent.application;
-                  var newSSRCs = newContentDesc.sources || [];
+                var newContentDesc = newContent.application;
+                var newSSRCs = newContentDesc.sources || [];
+                var newGroups = newContentDesc.sourceGroups || [];
 
-                  ssrcs = ssrcs.concat(newSSRCs);
-                  newDesc.contents[idx].application.sources = JSON.parse(JSON.stringify(ssrcs));
+                var found, i, j, k;
 
-                  var newGroups = newContentDesc.sourceGroups || [];
-                  groups = groups.concat(newGroups);
-                  newDesc.contents[idx].application.sourceGroups = JSON.parse(JSON.stringify(groups));
-              });
-          });
 
-          self.pc.handleOffer({
-              type: 'offer',
-              jingle: newDesc
-          }, function (err) {
-              if (err) {
-                  self._log('error', 'Error adding new stream source');
-                  cb({
-                      condition: 'general-error'
-                  });
-                  return done();
-              }
+                for (i = 0; i < newSSRCs.length; i++) {
+                    found = -1;
+                    for (j = 0; j < ssrcs.length; j++) {
+                        if (newSSRCs[i].ssrc === ssrcs[j].ssrc) {
+                            found = j;
+                            break;
+                        }
+                    }
+                    if (found > -1) {
+                        ssrcs.splice(found, 1);
+                        newDesc.contents[idx].application.sources = JSON.parse(JSON.stringify(ssrcs));
+                    }
+                }
 
-              self.pc.answer(self.constraints, function (err) {
-                  if (err) {
-                      self._log('error', 'Error adding new stream source');
-                      cb({
-                          condition: 'general-error'
-                      });
-                      return done();
-                  }
-                  cb();
-                  done();
-              });
-          });
-        };
+                // Remove ssrc-groups that are no longer needed
+                for (i = 0; i < newGroups.length; i++) {
+                    found = -1;
+                    for (j = 0; j < groups.length; j++) {
+                        if (newGroups[i].semantics === groups[j].semantics &&
+                            newGroups[i].sources.length === groups[j].sources.length) {
+                            var same = true;
+                            for (k = 0; k < newGroups[i].sources.length; k++) {
+                                if (newGroups[i].sources[k] !== groups[j].sources[k]) {
+                                    same = false;
+                                    break;
+                                }
+                            }
+                            if (same) {
+                                found = j;
+                                break;
+                            }
+                        }
+                    }
+                    if (found > -1) {
+                        groups.splice(found, 1);
+                        newDesc.contents[idx].application.sourceGroups = JSON.parse(JSON.stringify(groups));
+                    }
+                }
+            });
+        });
 
-        self.act(onSourceAddAction);
+        self.pc.handleOffer({
+            type: 'offer',
+            jingle: newDesc
+        }, function (err) {
+            if (err) {
+                self._log('error', 'Error removing stream source');
+                cb({
+                    condition: 'general-error'
+                });
+                return done();
+            }
+            self.pc.answer(self.constraints, function (err) {
+                if (err) {
+                    self._log('error', 'Error removing stream source');
+                    cb({
+                        condition: 'general-error'
+                    });
+                    return done();
+                }
+                cb();
+                done();
+            });
+        });
     },
 
     onSourceRemove: function (changes, cb) {
         var self = this;
-
-        var onSourceRemoveAction = function(done){
-          self._log('info', 'Removing stream source');
-
-          var newDesc = self.pc.remoteDescription;
-          self.pc.remoteDescription.contents.forEach(function (content, idx) {
-              var desc = content.application;
-              var ssrcs = desc.sources || [];
-              var groups = desc.sourceGroups || [];
-
-              changes.contents.forEach(function (newContent) {
-                  if (content.name !== newContent.name) {
-                      return;
-                  }
-
-                  var newContentDesc = newContent.application;
-                  var newSSRCs = newContentDesc.sources || [];
-                  var newGroups = newContentDesc.sourceGroups || [];
-
-                  var found, i, j, k;
-
-
-                  for (i = 0; i < newSSRCs.length; i++) {
-                      found = -1;
-                      for (j = 0; j < ssrcs.length; j++) {
-                          if (newSSRCs[i].ssrc === ssrcs[j].ssrc) {
-                              found = j;
-                              break;
-                          }
-                      }
-                      if (found > -1) {
-                          ssrcs.splice(found, 1);
-                          newDesc.contents[idx].application.sources = JSON.parse(JSON.stringify(ssrcs));
-                      }
-                  }
-
-                  // Remove ssrc-groups that are no longer needed
-                  for (i = 0; i < newGroups.length; i++) {
-                      found = -1;
-                      for (j = 0; j < groups.length; j++) {
-                          if (newGroups[i].semantics === groups[j].semantics &&
-                              newGroups[i].sources.length === groups[j].sources.length) {
-                              var same = true;
-                              for (k = 0; k < newGroups[i].sources.length; k++) {
-                                  if (newGroups[i].sources[k] !== groups[j].sources[k]) {
-                                      same = false;
-                                      break;
-                                  }
-                              }
-                              if (same) {
-                                  found = j;
-                                  break;
-                              }
-                          }
-                      }
-                      if (found > -1) {
-                          groups.splice(found, 1);
-                          newDesc.contents[idx].application.sourceGroups = JSON.parse(JSON.stringify(groups));
-                      }
-                  }
-              });
-          });
-
-          self.pc.handleOffer({
-              type: 'offer',
-              jingle: newDesc
-          }, function (err) {
-              if (err) {
-                  self._log('error', 'Error removing stream source');
-                  cb({
-                      condition: 'general-error'
-                  });
-                  return done();
-              }
-              self.pc.answer(self.constraints, function (err) {
-                  if (err) {
-                      self._log('error', 'Error removing stream source');
-                      cb({
-                          condition: 'general-error'
-                      });
-                      return done();
-                  }
-                  cb();
-                  done();
-              });
-          });
-        };
-
-        self.act(onSourceRemoveAction);
+        self._queue(function(done){
+          self._onSourceRemove(changes, cb, done);
+        });
     },
 
     // ----------------------------------------------------------------
