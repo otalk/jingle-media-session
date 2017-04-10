@@ -8,12 +8,6 @@
 $ npm install jingle-media-session
 ```
 
-## Building bundled/minified version (for AMD, etc)
-
-```sh
-$ make
-```
-
 The bundled and minified files will be in the generated `build` directory.
 
 ## License

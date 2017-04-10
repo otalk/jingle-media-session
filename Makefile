@@ -22,7 +22,7 @@ test: lint
 	covert test/index.js | tap-spec
 
 lint:
-	jshint .
+	node_modules/.bin/semistandard .
 
 audit:
 	nsp package
