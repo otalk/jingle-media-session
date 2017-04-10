@@ -125,6 +125,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // Session control methods
     // ----------------------------------------------------------------
 
+    start: function (offerOptions, next) {
+        this._queue(this._start.bind(this, offerOptions, next));
+    },
+
     _start: function (offerOptions, next, done) {
       var self = this;
       self.state = 'pending';
@@ -167,11 +171,16 @@ MediaSession.prototype = extend(MediaSession.prototype, {
       });
     },
 
-    start: function (offerOptions, next) {
-        var self = this;
-        self._queue(function(done){
-          self._start(offerOptions, next, done);
-        });
+    accept: function (opts, next) {
+        // support calling with accept(next) or accept(opts, next)
+        if (arguments.length === 1 && typeof opts === 'function') {
+            next = opts;
+            opts = {};
+        }
+        next = next || function () {};
+        opts = opts || {};
+
+        this._queue(this._accept.bind(this, opts, next));
     },
 
     _accept: function (opts, next, done) {
@@ -203,20 +212,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
     },
 
-    accept: function (opts, next) {
-        var self = this;
-
-        // support calling with accept(next) or accept(opts, next)
-        if (arguments.length === 1 && typeof opts === 'function') {
-            next = opts;
-            opts = {};
-        }
-        next = next || function () {};
-        opts = opts || {};
-
-        self._queue(function(done){
-          self._accept(opts, next, done);
-        });
+    end: function (reason, silent) {
+        this._queue(this._end.bind(this, reason, silent));
     },
 
     _end: function (reason, silent, done) {
@@ -229,11 +226,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
       done();
     },
 
-    end: function (reason, silent) {
-        var self = this;
-        self._queue(function(done){
-          self._end(reason, silent, done);
-        });
+    ring: function () {
+        this._queue(this._ring.bind(this));
     },
 
     _ring: function (done) {
@@ -244,11 +238,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         done();
     },
 
-    ring: function () {
-        var self = this;
-        self._queue(function(done){
-          self._ring(done);
-        });
+    mute: function (creator, name) {
+        this._queue(this._mute.bind(this, creator, name));
     },
 
     _mute: function (creator, name, done) {
@@ -264,11 +255,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         done();
     },
 
-    mute: function (creator, name) {
-        var self = this;
-        self._queue(function(done){
-          self._mute(creator, name, done);
-        });
+    unmute: function (creator, name) {
+        this._queue(this._unmute.bind(this, creator, name));
     },
 
     _unmute: function (creator, name, done) {
@@ -283,11 +271,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         done();
     },
 
-    unmute: function (creator, name) {
-        var self = this;
-        self._queue(function(done){
-          self._unmute(creator, name, done);
-        });
+    hold: function () {
+        this._queue(this._hold.bind(this));
     },
 
     _hold: function (done) {
@@ -297,11 +282,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         done();
     },
 
-    hold: function () {
-        var self = this;
-        self._queue(function(done){
-          self._hold(done);
-        });
+    resume: function () {
+        this._queue(this._resume.bind(this));
     },
 
     _resume: function (done) {
@@ -311,16 +293,14 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         done();
     },
 
-    resume: function () {
-        var self = this;
-        self._queue(function(done){
-          self._resume(done);
-        });
-    },
 
     // ----------------------------------------------------------------
     // Stream control methods
     // ----------------------------------------------------------------
+
+    addStream: function (stream, renegotiate, cb) {
+        this._queue(this._addStream.bind(this, stream, renegotiate, cb));
+    },
 
     _addStream: function (stream, renegotiate, cb, done) {
         var self = this;
@@ -364,15 +344,12 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
     },
 
-    addStream: function (stream, renegotiate, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._addStream(stream, renegotiate, cb, done);
-        });
-    },
-
     addStream2: function (stream, cb) {
         this.addStream(stream, true, cb);
+    },
+
+    removeStream: function (stream, renegotiate, cb) {
+        this._queue(this._removeStream.bind(this, stream, renegotiate, cb));
     },
 
     _removeStream: function (stream, renegotiate, cb, done) {
@@ -419,15 +396,12 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
     },
 
-    removeStream: function (stream, renegotiate, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._removeStream(stream, renegotiate, cb, done);
-        });
-    },
-
     removeStream2: function (stream, cb) {
         this.removeStream(stream, true, cb);
+    },
+
+    switchStream: function (oldStream, newStream, cb) {
+        this._queue(this._switchStream.bind(this, oldStream, newStream, cb));
     },
 
     _switchStream: function (oldStream, newStream, cb, done) {
@@ -467,13 +441,6 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 cb();
                 done();
             });
-        });
-    },
-
-    switchStream: function (oldStream, newStream, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._switchStream(oldStream, newStream, cb, done);
         });
     },
 
@@ -546,6 +513,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // Jingle action handers
     // ----------------------------------------------------------------
 
+    onSessionInitiate: function (changes, cb) {
+        this._queue(this._onSessionInitiate.bind(this, changes, cb));
+    },
+
     _onSessionInitiate: function (changes, cb, done) {
         var self = this;
         self._log('info', 'Initiating incoming session');
@@ -567,11 +538,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
     },
 
-    onSessionInitiate: function (changes, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._onSessionInitiate(changes, cb, done);
-        });
+    onSessionAccept: function (changes, cb) {
+        this._queue(this._onSessionAccept.bind(this, changes, cb));
     },
 
     _onSessionAccept: function (changes, cb, done) {
@@ -592,11 +560,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
     },
 
-    onSessionAccept: function (changes, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._onSessionAccept(changes, cb, done);
-        });
+    onSessionTerminate: function (changes, cb) {
+        this._queue(this._onSessionTerminate.bind(this, changes, cb));
     },
 
     _onSessionTerminate: function (changes, cb, done) {
@@ -612,11 +577,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         done();
     },
 
-    onSessionTerminate: function (changes, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._onSessionTerminate(changes, cb, done);
-        });
+    onSessionInfo: function (info, cb) {
+        this._queue(this._onSessionInfo.bind(this, info, cb));
     },
 
     _onSessionInfo: function (info, cb, done) {
@@ -661,11 +623,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         done();
     },
 
-    onSessionInfo: function (info, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._onSessionInfo(info, cb, done);
-        });
+    onTransportInfo: function (changes, cb) {
+      this._queue(this._onTransportInfo.bind(changes, cb));
     },
 
     _onTransportInfo: function (changes, cb, done) {
@@ -676,11 +635,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
       });
     },
 
-    onTransportInfo: function (changes, cb) {
-      var self = this;
-      self._queue(function(done){
-        self._onTransportInfo(changes, cb, done);
-      });
+    onSourceAdd: function (changes, cb) {
+        this._queue(this._onSourceAdd.bind(this, changes, cb));
     },
 
     _onSourceAdd: function (changes, cb, done) {
@@ -736,11 +692,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
     },
 
-    onSourceAdd: function (changes, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._onSourceAdd(changes, cb, done);
-        });
+    onSourceRemove: function (changes, cb) {
+        this._queue(this._onSourceRemove.bind(changes, cb));
     },
 
     _onSourceRemove: function (changes, cb, done) {
@@ -828,13 +781,6 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 cb();
                 done();
             });
-        });
-    },
-
-    onSourceRemove: function (changes, cb) {
-        var self = this;
-        self._queue(function(done){
-          self._onSourceRemove(changes, cb, done);
         });
     },
 
