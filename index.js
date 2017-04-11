@@ -624,7 +624,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     },
 
     onTransportInfo: function (changes, cb) {
-      this._queue(this._onTransportInfo.bind(changes, cb));
+      this._queue(this._onTransportInfo.bind(this, changes, cb));
     },
 
     _onTransportInfo: function (changes, cb, done) {
@@ -693,7 +693,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     },
 
     onSourceRemove: function (changes, cb) {
-        this._queue(this._onSourceRemove.bind(changes, cb));
+        this._queue(this._onSourceRemove.bind(this, changes, cb));
     },
 
     _onSourceRemove: function (changes, cb, done) {
