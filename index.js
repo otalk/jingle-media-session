@@ -403,6 +403,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 this.connectionState = 'disconnected';
                 break;
         }
+        this.emit('connectionStateChange', this, this.connectionState);
     },
 
     // ----------------------------------------------------------------
