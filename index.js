@@ -509,9 +509,27 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     },
 
     onTransportInfo: function (changes, cb) {
-        this.pc.processIce(changes, function () {
-            cb();
-        });
+        if (!this._transportInfoBuffer) {
+            this._transportInfoBuffer = [];
+        }
+        this._transportInfoBuffer.push(changes);
+        if (this.state === 'pending') {
+            this._log('info', 'Queueing transport info while in pending state');
+            return cb();
+        }
+
+        var self = this;
+        var processNext = function () {
+            var nextChanges = self._transportInfoBuffer.shift();
+            if (nextChanges) {
+                self.pc.processIce(nextChanges, function () {
+                    processNext();
+                });
+            } else {
+                cb();
+            }
+        };
+        processNext();
     },
 
     onSourceAdd: function (changes, cb) {
