@@ -528,6 +528,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             var ssrcs = desc.sources || [];
             var groups = desc.sourceGroups || [];
 
+            if (!changes.contents) {
+                return;
+            }
+
             changes.contents.forEach(function (newContent) {
                 if (content.name !== newContent.name) {
                     return;
