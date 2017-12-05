@@ -276,7 +276,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             });
         });
 
-        vat that = this;
+        var that = this;
         setInterval(function() {
           console.log(that.pc.getStats());
         }, 2000);
