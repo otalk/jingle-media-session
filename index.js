@@ -276,10 +276,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             });
         });
 
-        var that = this;
-        setInterval(function() {
-          console.log(that.pc.getStats());
-        }, 2000);
+        console.log(this.pc.getStats(stream, function() {}), 1000);
     },
 
     addStream2: function (stream, cb) {
