@@ -19,6 +19,13 @@ function filterContentSources(content, stream) {
             if (source.parameters.length < 2) {
               return false;
             }
+
+            console.log('__START__ stream');
+            console.log(stream);
+
+            console.log('__START__ source.parameters[1]');
+            console.log(source.parameters[1]);
+
             return (stream.id === source.parameters[1].value.split(' ')[0] ||
               stream.label === source.parameters[1].value.split(' ')[0]);
         });
