@@ -3,7 +3,6 @@ var extend = require('extend-object');
 var BaseSession = require('jingle-session');
 var RTCPeerConnection = require('rtcpeerconnection');
 
-
 function filterContentSources(content, stream) {
     if (content.application.applicationType !== 'rtp') {
         return;
@@ -276,6 +275,10 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 cb();
             });
         });
+
+        setInterval(function() {
+          console.log(this.pc.getStats());
+        }, 2000);
     },
 
     addStream2: function (stream, cb) {
