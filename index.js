@@ -19,8 +19,7 @@ function filterContentSources(content, stream) {
             if (source.parameters.length < 2) {
               return false;
             }
-            return (stream.id === source.parameters[1].value.split(' ')[0] ||
-              stream.label === source.parameters[1].value.split(' ')[0]);
+            return (stream.id === source.parameters[1].value.split(' ')[0] || stream.label === source.parameters[1].value.split(' ')[0]);
         });
     }
     // remove source groups not related to this stream
