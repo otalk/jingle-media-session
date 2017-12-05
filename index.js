@@ -3,7 +3,6 @@ var extend = require('extend-object');
 var BaseSession = require('jingle-session');
 var RTCPeerConnection = require('rtcpeerconnection');
 
-
 function filterContentSources(content, stream) {
     if (content.application.applicationType !== 'rtp') {
         return;
