@@ -2,6 +2,7 @@ var util = require('util');
 var extend = require('extend-object');
 var BaseSession = require('jingle-session');
 var RTCPeerConnection = require('rtcpeerconnection');
+var queue = require('queue');
 
 function filterContentSources(content, stream) {
     if (content.application.applicationType !== 'rtp') {
@@ -54,6 +55,11 @@ function MediaSession(opts) {
         iceServers: opts.iceServers || [],
         useJingle: true
     }, opts.constraints || {});
+
+    this.q = queue({
+      autostart: true,
+      concurrency: 1
+    });
 
     this.pc.on('ice', this.onIceCandidate.bind(this, opts));
     this.pc.on('endOfCandidates', this.onIceEndOfCandidates.bind(this, opts));
@@ -242,31 +248,40 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             self.constraints = renegotiate;
         }
 
-        this.pc.handleOffer({
+        this.q.push(function(qCb) {
+          function done(err) {
+            qCb(err);
+            return cb(err);
+          }
+
+          self.pc.handleOffer({
             type: 'offer',
-            jingle: this.pc.remoteDescription
-        }, function (err) {
+            jingle: self.pc.remoteDescription
+          }, function (err) {
             if (err) {
-                self._log('error', 'Could not create offer for adding new stream');
-                return cb(err);
+              self._log('error', 'Could not create offer for adding new stream');
+              return done(err);
             }
             self.pc.answer(self.constraints, function (err, answer) {
-                if (err) {
-                    self._log('error', 'Could not create answer for adding new stream');
-                    return cb(err);
-                }
-                answer.jingle.contents.forEach(function (content) {
-                    filterContentSources(content, stream);
-                });
-                answer.jingle.contents = answer.jingle.contents.filter(function (content) {
-                    return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
-                });
-                delete answer.jingle.groups;
+              if (err) {
+                self._log('error', 'Could not create answer for adding new stream');
+                return done(err);
+              }
+              answer.jingle.contents.forEach(function (content) {
+                filterContentSources(content, stream);
+              });
+              answer.jingle.contents = answer.jingle.contents.filter(function (content) {
+                return content.application.applicationType === 'rtp' && content.application.sources && content.application.sources.length;
+              });
+              delete answer.jingle.groups;
 
-                self.send('source-add', answer.jingle);
-                cb();
+              self.send('source-add', answer.jingle);
+              done();
             });
+          });
+
         });
+
     },
 
     addStream2: function (stream, cb) {
@@ -548,26 +563,32 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             });
         });
 
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: newDesc
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Error adding new stream source');
-                return cb({
-                    condition: 'general-error'
-                });
-            }
+        this.q.push(function(qCb) {
+          function done(err) {
+            qCb(err);
+            return cb(err);
+          }
+          self.pc.handleOffer({
+              type: 'offer',
+              jingle: newDesc
+          }, function (err) {
+              if (err) {
+                  self._log('error', 'Error adding new stream source');
+                  return done({
+                      condition: 'general-error'
+                  });
+              }
 
-            self.pc.answer(self.constraints, function (err) {
-                if (err) {
-                    self._log('error', 'Error adding new stream source');
-                    return cb({
-                        condition: 'general-error'
-                    });
-                }
-                cb();
-            });
+              self.pc.answer(self.constraints, function (err) {
+                  if (err) {
+                      self._log('error', 'Error adding new stream source');
+                      return done({
+                          condition: 'general-error'
+                      });
+                  }
+                  done();
+              });
+          });
         });
     },
 
