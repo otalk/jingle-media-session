@@ -78,7 +78,7 @@ function MediaSession(opts) {
 }
 
 
-function offerAnswerQueue(self, errorMsg, cb) {
+function offerAnswerQueue(self, errorMsg, jingleDesc, cb) {
   self.q.push(function(qCb) {
     function done(err, answer) {
       qCb(err);
@@ -87,7 +87,7 @@ function offerAnswerQueue(self, errorMsg, cb) {
 
     self.pc.handleOffer({
       type: 'offer',
-      jingle: self.pc.remoteDescription
+      jingle: jingleDesc
     }, function (err) {
       if (err) {
         self._log('error', errorMsg);
@@ -281,7 +281,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         }
 
         var errorMsg = 'Could not create offer for adding new stream';
-        offerAnswerQueue(this, errorMsg, function(err, answer) {
+        offerAnswerQueue(this, errorMsg, self.pc.remoteDescription, function(err, answer) {
           answer.jingle.contents.forEach(function (content) {
             filterContentSources(content, stream);
           });
@@ -324,21 +324,9 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.send('source-remove', desc);
         this.pc.removeStream(stream);
 
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: this.pc.remoteDescription
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Could not process offer for removing stream');
-                return cb(err);
-            }
-            self.pc.answer(self.constraints, function (err) {
-                if (err) {
-                    self._log('error', 'Could not process answer for removing stream');
-                    return cb(err);
-                }
-                cb();
-            });
+        var errorMsg = 'Could not process offer for removing stream';
+        offerAnswerQueue(self, errorMsg, this.pc.remoteDescription, function(err) {
+          cb(err);
         });
     },
 
@@ -361,26 +349,15 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         this.send('source-remove', desc);
 
         this.pc.addStream(newStream);
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: this.pc.remoteDescription
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Could not process offer for switching streams');
-                return cb(err);
-            }
-            self.pc.answer(self.constraints, function (err, answer) {
-                if (err) {
-                    self._log('error', 'Could not process answer for switching streams');
-                    return cb(err);
-                }
-                answer.jingle.contents.forEach(function (content) {
-                    delete content.transport;
-                    delete content.application.payloads;
-                });
-                self.send('source-add', answer.jingle);
-                cb();
-            });
+
+        var errorMsg = 'Could not process offer for switching streams';
+        offerAnswerQueue(self, errorMsg, this.pc.remoteDescription, function(err, answer) {
+          answer.jingle.contents.forEach(function (content) {
+            delete content.transport;
+            delete content.application.payloads;
+          });
+          self.send('source-add', answer.jingle);
+          cb(err);
         });
     },
 
@@ -454,22 +431,17 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     // ----------------------------------------------------------------
 
     onSessionInitiate: function (changes, cb) {
-        var self = this;
-
         this._log('info', 'Initiating incoming session');
 
         this.state = 'pending';
 
         this.pc.isInitiator = false;
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: changes
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Could not create WebRTC answer');
-                return cb({condition: 'general-error'});
-            }
-            cb();
+        var errorMsg = 'Could not create WebRTC answer';
+        offerAnswerQueue(this, errorMsg, changes, function(err) {
+          if (err) {
+            return cb({condition: 'general-error'});
+          }
+          cb();
         });
     },
 
@@ -576,7 +548,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         });
 
         var errorMsg = 'Error adding new stream source';
-        offerAnswerQueue(self, errorMsg, function(err) {
+        offerAnswerQueue(self, errorMsg, newDesc, function(err) {
           if (err) {
             return cb({condition: 'general-error'});
           }
@@ -585,7 +557,6 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     },
 
     onSourceRemove: function (changes, cb) {
-        var self = this;
         this._log('info', 'Removing stream source');
 
         var newDesc = this.pc.remoteDescription;
@@ -647,25 +618,12 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             });
         });
 
-        this.pc.handleOffer({
-            type: 'offer',
-            jingle: newDesc
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Error removing stream source');
-                return cb({
-                    condition: 'general-error'
-                });
-            }
-            self.pc.answer(self.constraints, function (err) {
-                if (err) {
-                    self._log('error', 'Error removing stream source');
-                    return cb({
-                        condition: 'general-error'
-                    });
-                }
-                cb();
-            });
+        var errorMsg = 'Error removing stream source';
+        offerAnswerQueue(this, errorMsg, newDesc, function(err) {
+          if (err) {
+            return cb({condition: 'general-error'});
+          }
+          cb();
         });
     },
 
