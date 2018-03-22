@@ -93,6 +93,7 @@ function offerAnswerQueue(self, errorMsg, jingleDesc, cb) {
         self._log('error', errorMsg);
         return done(err);
       }
+
       self.pc.answer(self.constraints, function (err, answer) {
 
         if (err) {
@@ -103,6 +104,52 @@ function offerAnswerQueue(self, errorMsg, jingleDesc, cb) {
         // call the remaing logic in the cb
         done(null, answer);
       });
+    });
+  });
+}
+
+
+function offerQueue(self, errorMsg, jingleDesc, cb) {
+  self.q.push(function(qCb) {
+    function done(err, answer) {
+      qCb(err);
+      return cb(err, answer);
+    }
+
+    self.pc.handleOffer({
+      type: 'offer',
+      jingle: jingleDesc
+    }, function (err) {
+      if (err) {
+        self._log('error', errorMsg);
+        return done(err);
+      }
+
+      // call the remaing logic in the cb
+      done();
+    });
+  });
+}
+
+
+function answerQueue(self, errorMsg, jingleDesc, cb) {
+  self.q.push(function(qCb) {
+    function done(err, answer) {
+      qCb(err);
+      return cb(err, answer);
+    }
+
+    self.pc.handleAnswer({
+      type: 'answer',
+      jingle: jingleDesc
+    }, function (err) {
+      if (err) {
+        self._log('error', errorMsg);
+        return done(err);
+      }
+
+      // call the remaing logic in the cb
+      done();
     });
   });
 }
@@ -437,7 +484,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         this.pc.isInitiator = false;
         var errorMsg = 'Could not create WebRTC answer';
-        offerAnswerQueue(this, errorMsg, changes, function(err) {
+        offerQueue(this, errorMsg, changes, function(err) {
           if (err) {
             return cb({condition: 'general-error'});
           }
@@ -449,16 +496,14 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         var self = this;
 
         this.state = 'active';
-        this.pc.handleAnswer({
-            type: 'answer',
-            jingle: changes
-        }, function (err) {
-            if (err) {
-                self._log('error', 'Could not process WebRTC answer');
-                return cb({condition: 'general-error'});
-            }
-            self.emit('accepted', self);
-            cb();
+
+        var errorMsg = 'Could not process WebRTC answer';
+        answerQueue(this, errorMsg, changes, function(err) {
+          if (err) {
+            return cb({condition: 'general-error'});
+          }
+          self.emit('accepted', self);
+          cb();
         });
     },
 
