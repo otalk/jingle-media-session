@@ -195,7 +195,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         this.pc.isInitiator = true;
         self.q.push(function(qCb) {
-          this.pc.offer(offerOptions, function (err, offer) {
+          self.pc.offer(offerOptions, function (err, offer) {
               if (err) {
                   self._log('error', 'Could not create WebRTC offer', err);
                   return self.end('failed-application', true);
@@ -249,12 +249,12 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             }
         };
 
-        this._log('info', 'Accepted incoming session');
+        self._log('info', 'Accepted incoming session');
 
-        this.state = 'active';
+        self.state = 'active';
 
         self.q.push(function(qCb) {
-          this.pc.answer(self.constraints, function (err, answer) {
+          self.pc.answer(self.constraints, function (err, answer) {
             if (err) {
               self._log('error', 'Could not create WebRTC answer', err);
               return self.end('failed-application');
