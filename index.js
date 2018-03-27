@@ -559,9 +559,17 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     },
 
     onTransportInfo: function (changes, cb) {
-        this.pc.processIce(changes, function () {
-            cb();
+      var self = this;
+      self.q.push(function(qCb) {
+        function done() {
+          qCb();
+          return cb();
+        }
+
+        self.pc.processIce(changes, function () {
+          done();
         });
+      });
     },
 
     onSourceAdd: function (changes, cb) {
