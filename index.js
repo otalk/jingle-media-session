@@ -194,37 +194,40 @@ MediaSession.prototype = extend(MediaSession.prototype, {
         next = next || function () {};
 
         this.pc.isInitiator = true;
-        this.pc.offer(offerOptions, function (err, offer) {
-            if (err) {
-                self._log('error', 'Could not create WebRTC offer', err);
-                return self.end('failed-application', true);
-            }
+        self.q.push(function(qCb) {
+          this.pc.offer(offerOptions, function (err, offer) {
+              if (err) {
+                  self._log('error', 'Could not create WebRTC offer', err);
+                  return self.end('failed-application', true);
+              }
 
-            // a workaround for missing a=sendonly
-            // https://code.google.com/p/webrtc/issues/detail?id=1553
-            if (offerOptions && offerOptions.mandatory) {
-                offer.jingle.contents.forEach(function (content) {
-                    var mediaType = content.application.media;
+              // a workaround for missing a=sendonly
+              // https://code.google.com/p/webrtc/issues/detail?id=1553
+              if (offerOptions && offerOptions.mandatory) {
+                  offer.jingle.contents.forEach(function (content) {
+                      var mediaType = content.application.media;
 
-                    if (!content.description || content.application.applicationType !== 'rtp') {
-                        return;
-                    }
+                      if (!content.description || content.application.applicationType !== 'rtp') {
+                          return;
+                      }
 
-                    if (!offerOptions.mandatory.OfferToReceiveAudio && mediaType === 'audio') {
-                        content.senders = 'initiator';
-                    }
+                      if (!offerOptions.mandatory.OfferToReceiveAudio && mediaType === 'audio') {
+                          content.senders = 'initiator';
+                      }
 
-                    if (!offerOptions.mandatory.OfferToReceiveVideo && mediaType === 'video') {
-                        content.senders = 'initiator';
-                    }
-                });
-            }
+                      if (!offerOptions.mandatory.OfferToReceiveVideo && mediaType === 'video') {
+                          content.senders = 'initiator';
+                      }
+                  });
+              }
 
-            offer.jingle.contents.forEach(filterUnusedLabels);
+              offer.jingle.contents.forEach(filterUnusedLabels);
 
-            self.send('session-initiate', offer.jingle);
+              self.send('session-initiate', offer.jingle);
 
-            next();
+              next();
+              qCb();
+          });
         });
     },
 
@@ -250,10 +253,11 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         this.state = 'active';
 
-        this.pc.answer(self.constraints, function (err, answer) {
+        self.q.push(function(qCb) {
+          this.pc.answer(self.constraints, function (err, answer) {
             if (err) {
-                self._log('error', 'Could not create WebRTC answer', err);
-                return self.end('failed-application');
+              self._log('error', 'Could not create WebRTC answer', err);
+              return self.end('failed-application');
             }
 
             answer.jingle.contents.forEach(filterUnusedLabels);
@@ -261,6 +265,8 @@ MediaSession.prototype = extend(MediaSession.prototype, {
             self.send('session-accept', answer.jingle);
 
             next();
+            qCb();
+          });
         });
     },
 
