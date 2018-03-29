@@ -335,6 +335,11 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         var errorMsg = 'adding new stream';
         queueOfferAnswer(this, errorMsg, self.pc.remoteDescription, function(err, answer) {
+          if (err) {
+            self._log('error', 'Could not create offer for ' + errorMsg);
+            return cb(err);
+          }
+
           answer.jingle.contents.forEach(function (content) {
             filterContentSources(content, stream);
           });
@@ -405,6 +410,11 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
         var errorMsg = 'switching streams';
         queueOfferAnswer(self, errorMsg, this.pc.remoteDescription, function(err, answer) {
+          if (err) {
+            self._log('error', 'Could not create offer for ' + errorMsg);
+            return cb(err);
+          }
+
           answer.jingle.contents.forEach(function (content) {
             delete content.transport;
             delete content.application.payloads;
