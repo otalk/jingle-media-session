@@ -62,6 +62,8 @@ function MediaSession(opts) {
     this.pc.on('addStream', this.onAddStream.bind(this));
     this.pc.on('removeStream', this.onRemoveStream.bind(this));
     this.pc.on('addChannel', this.onAddChannel.bind(this));
+    this.pc.on('addTrack', this.onAddTrack.bind(this));
+    this.pc.on('removeTrack', this.onRemoveTrack.bind(this));
 
     if (opts.stream) {
         this.addStream(opts.stream);
@@ -421,6 +423,20 @@ MediaSession.prototype = extend(MediaSession.prototype, {
     onRemoveStream: function (event) {
         this._log('info', 'Stream removed');
         this.emit('peerStreamRemoved', this, event.stream);
+    },
+
+    // ----------------------------------------------------------------
+    // Track event handlers
+    // ----------------------------------------------------------------
+
+    onAddTrack: function (event) {
+        this._log('info', 'Track added');
+        this.emit('peerTrackAdded', this, event.track, event.stream);
+    },
+
+    onRemoveTrack: function (event) {
+        this._log('info', 'Track removed');
+        this.emit('peerTrackRemoved', this, event.track, event.stream);
     },
 
     // ----------------------------------------------------------------
