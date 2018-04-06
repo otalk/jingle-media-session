@@ -1,6 +1,6 @@
 {
   "name": "jingle-media-session",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "author": "Lance Stout <lance@andyet.net>",
   "bugs": "https://github.com/otalk/jingle-media-session/issues",
   "contributors": [
