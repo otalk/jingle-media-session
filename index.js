@@ -431,7 +431,7 @@ MediaSession.prototype = extend(MediaSession.prototype, {
 
     onAddTrack: function (event) {
         this._log('info', 'Track added');
-        this.emit('peerTrackAdded', this, event.track, event.stream);
+        this.emit('peerTrackAdded', this, event.track, event.streams[0]);
     },
 
     onRemoveTrack: function (event) {
