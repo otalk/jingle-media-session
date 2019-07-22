@@ -118,26 +118,6 @@ MediaSession.prototype = extend(MediaSession.prototype, {
                 return self.end('failed-application', true);
             }
 
-            // a workaround for missing a=sendonly
-            // https://code.google.com/p/webrtc/issues/detail?id=1553
-            if (offerOptions && offerOptions.mandatory) {
-                offer.jingle.contents.forEach(function (content) {
-                    var mediaType = content.application.media;
-
-                    if (!content.description || content.application.applicationType !== 'rtp') {
-                        return;
-                    }
-
-                    if (!offerOptions.mandatory.OfferToReceiveAudio && mediaType === 'audio') {
-                        content.senders = 'initiator';
-                    }
-
-                    if (!offerOptions.mandatory.OfferToReceiveVideo && mediaType === 'video') {
-                        content.senders = 'initiator';
-                    }
-                });
-            }
-
             offer.jingle.contents.forEach(filterUnusedLabels);
 
             self.send('session-initiate', offer.jingle);
