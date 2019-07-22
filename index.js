@@ -84,7 +84,7 @@ Object.defineProperties(MediaSession.prototype, {
         set: function (value) {
             if (value !== this._ringing) {
                 this._ringing = value;
-                this.emit('change:ringing', value);
+                this.emit('change:ringing', this, value);
             }
         }
     },
